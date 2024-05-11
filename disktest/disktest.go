@@ -3,6 +3,7 @@ package disktest
 import (
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -51,15 +52,16 @@ func DDTest(language string, enableMultiCheck bool) string {
 		}
 	}
 	if language == "zh" {
-		result += "测试盘        块大小             直接写入                          直接读取\n"
+		result += "测试路径      块大小             直接写入                          直接读取\n"
 	} else {
-		result += "Test Disk     Block Size         Direct Write                      Direct Read\n"
+		result += "Test Path     Block Size         Direct Write                      Direct Read\n"
 	}
 	if enableMultiCheck {
 		for index, path := range mountPoints {
 			// 写入测试
 			// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
 			cmd1 := exec.Command("dd", "if=/dev/zero", "of="+path+"/100MB.test", "bs=4k", "count=25600", "oflag=direct")
+			defer os.Remove(path + "/100MB.test")
 			stderr1, err := cmd1.StderrPipe()
 			if err == nil {
 				result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
@@ -74,6 +76,7 @@ func DDTest(language string, enableMultiCheck bool) string {
 			// 读取测试
 			// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
 			cmd2 := exec.Command("dd", "if="+path+"/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
+			defer os.Remove(path + "/100MB.test")
 			stderr2, err := cmd2.StderrPipe()
 			if err == nil {
 				if err := cmd2.Start(); err == nil {
@@ -82,6 +85,8 @@ func DDTest(language string, enableMultiCheck bool) string {
 						tempText := string(outputBytes)
 						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
 							cmd2 = exec.Command("dd", "if="+path+"/100MB.test", "of="+path+"/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
+							defer os.Remove(path + "/100MB.test")
+							defer os.Remove(path + "/100MB_read.test")
 							stderr2, err = cmd2.StderrPipe()
 							if err == nil {
 								if err := cmd2.Start(); err == nil {
@@ -101,6 +106,7 @@ func DDTest(language string, enableMultiCheck bool) string {
 	} else {
 		// 写入测试
 		cmd1 := exec.Command("dd", "if=/dev/zero", "of=/root/100MB.test", "bs=4k", "count=25600", "oflag=direct")
+		defer os.Remove("/root/100MB.test")
 		stderr, err := cmd1.StderrPipe()
 		if err == nil {
 			if err := cmd1.Start(); err == nil {
@@ -110,6 +116,8 @@ func DDTest(language string, enableMultiCheck bool) string {
 					if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
 						if err == nil {
 							cmd1 = exec.Command("dd", "if=/tmp/100MB.test", "of=/tmp/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
+							defer os.Remove("/tmp/100MB.test")
+							defer os.Remove("/tmp/100MB_read.test")
 							stderr, err = cmd1.StderrPipe()
 							if err == nil {
 								if err := cmd1.Start(); err == nil {
@@ -130,6 +138,7 @@ func DDTest(language string, enableMultiCheck bool) string {
 		}
 		// 读取测试
 		cmd2 := exec.Command("dd", "if=/root/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
+		defer os.Remove("/root/100MB.test")
 		stderr2, err := cmd2.StderrPipe()
 		if err == nil {
 			if err := cmd2.Start(); err == nil {
@@ -138,6 +147,8 @@ func DDTest(language string, enableMultiCheck bool) string {
 					tempText := string(outputBytes)
 					if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
 						cmd2 = exec.Command("dd", "if=/tmp/100MB.test", "of=/tmp/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
+						defer os.Remove("/tmp/100MB.test")
+						defer os.Remove("/tmp/100MB_read.test")
 						stderr2, err = cmd2.StderrPipe()
 						if err == nil {
 							if err := cmd2.Start(); err == nil {
@@ -160,9 +171,7 @@ func DDTest(language string, enableMultiCheck bool) string {
 //25600+0 records in
 //25600+0 records out
 //104857600 bytes (105 MB, 100 MiB) copied, 15.034 s, 7.0 MB/s
-// dd if=/dev/zero of=/root/1GB.test bs=1M count=1000 oflag=direct
 
 //1000+0 records in
 //1000+0 records out
 //1048576000 bytes (1.0 GB, 1000 MiB) copied, 2.7358 s, 383 MB/s
-// rm -rf 1GB.test 100MB.test
