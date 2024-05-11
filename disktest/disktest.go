@@ -2,6 +2,7 @@ package disktest
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -55,18 +56,46 @@ func WinsatTest(language string) string {
 	return result
 }
 
+// isWritableMountpoint 检测挂载点是否为文件夹且可写入文件
+func isWritableMountpoint(path string) bool {
+	// 检测 mountpoint 是否是一个文件夹
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	// 尝试打开文件进行写入
+	file, err := os.OpenFile(path+"/.temp_write_check", os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	// 删除临时文件
+	os.Remove(path + "/.temp_write_check")
+	return true
+}
+
 // DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string) string {
-	var result string
+	var (
+		result      string
+		devices     []string
+		mountPoints []string
+	)
 	parts, err := disk.Partitions(false)
 	if err == nil {
 		for _, f := range parts {
-			fmt.Println(f)
-			// lsblk -e 11 -n -o NAME | grep -v "vda" | grep -v "snap" | grep -v "loop"
+			if !strings.Contains(f.Device, "vda") && !strings.Contains(f.Device, "snap") && !strings.Contains(f.Device, "loop") {
+				if isWritableMountpoint(f.Mountpoint) {
+					devices = append(devices, f.Device)
+					mountPoints = append(mountPoints, f.Mountpoint)
+				}
+			}
 		}
 	}
+	fmt.Println(devices)
+	fmt.Println(mountPoints)
 	// https://github.com/spiritLHLS/ecs/blob/38f882433291384ec7e0aef8bd73349396139879/ecs.sh#L2056
-	// dd if=/dev/zero of=/root/100MB.test bs=4k count=25600 oflag=direct
+	// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
 	//25600+0 records in
 	//25600+0 records out
 	//104857600 bytes (105 MB, 100 MiB) copied, 15.034 s, 7.0 MB/s
