@@ -15,10 +15,10 @@ func WinsatTest(language string, enableMultiCheck bool) string {
 	var result string
 	parts, err := disk.Partitions(true)
 	if err == nil {
-		if language == "zh" {
-			result += "测试的硬盘                随机写入                  顺序读取                 顺序写入\n"
-		} else {
+		if language == "en" {
 			result += "Test Disk               Random Read             Sequential Read         Sequential Write\n"
+		} else {
+			result += "测试的硬盘                随机写入                  顺序读取                 顺序写入\n"
 		}
 		if enableMultiCheck {
 			for _, f := range parts {
@@ -51,10 +51,10 @@ func DDTest(language string, enableMultiCheck bool) string {
 			}
 		}
 	}
-	if language == "zh" {
-		result += "测试路径      块大小             直接写入                          直接读取\n"
-	} else {
+	if language == "en" {
 		result += "Test Path     Block Size         Direct Write                      Direct Read\n"
+	} else {
+		result += "测试路径      块大小             直接写入                          直接读取\n"
 	}
 	if enableMultiCheck {
 		for index, path := range mountPoints {
