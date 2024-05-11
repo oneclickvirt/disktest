@@ -128,12 +128,14 @@ func DDTest(language string, enableMultiCheck bool) string {
 	if enableMultiCheck {
 		for index, path := range mountPoints {
 			result += devices[index] + "     "
-			// dd if=/dev/zero of=/root/100MB.test bs=4k count=25600 oflag=direct
+			// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
 			cmd := exec.Command("dd", "if=/dev/zero", "of="+path+"/100MB.test", "bs=4k", "count=25600", "oflag=direct")
 			output, err := cmd.Output()
 			if err == nil {
 				tempText := string(output)
-				fmt.Println(tempText)
+				fmt.Println(index, "of="+path+"/100MB.test", tempText)
+			} else {
+				fmt.Println(err.Error())
 			}
 		}
 	} else {
@@ -142,6 +144,8 @@ func DDTest(language string, enableMultiCheck bool) string {
 		if err == nil {
 			tempText := string(output)
 			fmt.Println(tempText)
+		} else {
+			fmt.Println(err.Error())
 		}
 	}
 	//25600+0 records in
