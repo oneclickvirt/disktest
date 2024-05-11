@@ -2,6 +2,7 @@ package disktest
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -130,26 +131,32 @@ func DDTest(language string, enableMultiCheck bool) string {
 			result += devices[index] + "     "
 			// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
 			cmd := exec.Command("dd", "if=/dev/zero", "of="+path+"/100MB.test", "bs=4k", "count=25600", "oflag=direct")
-			output, err := cmd.Output()
+			stderr, err := cmd.StderrPipe()
 			if err == nil {
-				tempText := string(output)
-				fmt.Println(index, "of="+path+"/100MB.test", tempText)
-				// IOPS （每秒输入/输出操作数），通过写入的块数除以写入所用的时间来计算
-				// 测试操作		写速度					读速度
-				// 100MB-4K Block		37.6 MB/s (9173 IOPS, 2.79s)		51.3 MB/s (12519 IOPS, 2.04s)
-			} else {
-				fmt.Println(err.Error())
+				if err := cmd.Start(); err == nil {
+					outputBytes, err := io.ReadAll(stderr)
+					if err == nil {
+						tempText := string(outputBytes)
+						fmt.Println(index, "of="+path+"/100MB.test", tempText)
+						// IOPS （每秒输入/输出操作数），通过写入的块数除以写入所用的时间来计算
+						// 测试操作		写速度					读速度
+						// 100MB-4K Block		37.6 MB/s (9173 IOPS, 2.79s)		51.3 MB/s (12519 IOPS, 2.04s)
+					}
+				}
 			}
 			result += "\n"
 		}
 	} else {
 		cmd := exec.Command("dd", "if=/dev/zero", "of=/root/100MB.test", "bs=4k", "count=25600", "oflag=direct")
-		output, err := cmd.Output()
+		stderr, err := cmd.StderrPipe()
 		if err == nil {
-			tempText := string(output)
-			fmt.Println(tempText)
-		} else {
-			fmt.Println(err.Error())
+			if err := cmd.Start(); err == nil {
+				outputBytes, err := io.ReadAll(stderr)
+				if err == nil {
+					tempText := string(outputBytes)
+					fmt.Println(tempText)
+				}
+			}
 		}
 	}
 	//25600+0 records in
