@@ -128,19 +128,35 @@ func DDTest(language string, enableMultiCheck bool) string {
 	}
 	if enableMultiCheck {
 		for index, path := range mountPoints {
-			result += devices[index] + "     "
 			// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
 			cmd := exec.Command("dd", "if=/dev/zero", "of="+path+"/100MB.test", "bs=4k", "count=25600", "oflag=direct")
 			stderr, err := cmd.StderrPipe()
 			if err == nil {
+				if language == "zh" {
+					result += "测试盘                  直接写入                 直接读取\n"
+				} else {
+					result += "Test Disk               Direct Read             Direct Read\n"
+				}
 				if err := cmd.Start(); err == nil {
 					outputBytes, err := io.ReadAll(stderr)
 					if err == nil {
 						tempText := string(outputBytes)
-						fmt.Println(index, "of="+path+"/100MB.test", tempText)
+						tp1 := strings.Split(tempText, "\n")
+						for _, t := range tp1 {
+							if strings.Contains(t, "bytes") {
+								// t 为 104857600 bytes (105 MB, 100 MiB) copied, 4.67162 s, 22.4 MB/s
+								tp2 := strings.Split(t, ",")
+								if len(tp2) == 4 {
+									blockSize := strings.Split(strings.TrimSpace(tp2[0]), " ")[0]
+									usageTime := strings.Split(strings.TrimSpace(tp2[2]), " ")[0]
+									ioSpeed := strings.Split(strings.TrimSpace(tp2[3]), " ")[0]
+									fmt.Println(devices[index], blockSize, usageTime, ioSpeed)
+								}
+							}
+						}
 						// IOPS （每秒输入/输出操作数），通过写入的块数除以写入所用的时间来计算
-						// 测试操作		写速度					读速度
-						// 100MB-4K Block		37.6 MB/s (9173 IOPS, 2.79s)		51.3 MB/s (12519 IOPS, 2.04s)
+						// 测试盘        测试操作		         写速度					             读速度
+						// /dev/sdb1    100MB-4K Block		37.6 MB/s (9173 IOPS, 2.79s)		51.3 MB/s (12519 IOPS, 2.04s)
 					}
 				}
 			}
