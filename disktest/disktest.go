@@ -129,9 +129,9 @@ func DDTest(language string, enableMultiCheck bool) string {
 	}
 	if enableMultiCheck {
 		if language == "zh" {
-			result += "测试盘        块大小             直接写入                           直接读取\n"
+			result += "测试盘        块大小             直接写入                          直接读取\n"
 		} else {
-			result += "Test Disk    Block Size         Direct Write                      Direct Read\n"
+			result += "Test Disk     Block Size         Direct Write                      Direct Read\n"
 		}
 		for index, path := range mountPoints {
 			// 写入测试
@@ -170,21 +170,25 @@ func DDTest(language string, enableMultiCheck bool) string {
 			}
 			// 读取测试
 			// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
-			nullPath := "/dev/null"
-			_, err = os.Stat(nullPath)
-			var cmd2 *exec.Cmd
-			if os.IsNotExist(err) {
-				cmd2 = exec.Command("dd", "if="+path+"/100MB.test", "of="+path+"/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
-			} else {
-				cmd2 = exec.Command("dd", "if="+path+"/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
-			}
+			cmd2 := exec.Command("dd", "if="+path+"/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
 			stderr2, err := cmd2.StderrPipe()
 			if err == nil {
 				if err := cmd2.Start(); err == nil {
 					outputBytes, err := io.ReadAll(stderr2)
 					if err == nil {
 						tempText := string(outputBytes)
-						fmt.Println("1", tempText)
+						if strings.Contains(tempText, "Invalid argument") {
+							cmd2 = exec.Command("dd", "if="+path+"/100MB.test", "of="+path+"/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
+							stderr2, err = cmd2.StderrPipe()
+							if err == nil {
+								if err := cmd2.Start(); err == nil {
+									outputBytes, err := io.ReadAll(stderr2)
+									if err == nil {
+										tempText = string(outputBytes)
+									}
+								}
+							}
+						}
 						tp1 := strings.Split(tempText, "\n")
 						var records, usageTime float64
 						records, _ = strconv.ParseFloat(strings.Split(strings.TrimSpace(tp1[0]), "+")[0], 64)
