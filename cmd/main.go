@@ -8,8 +8,8 @@ import (
 
 func main() {
 	// https://github.com/devlights/diskio
-	// res := disktest.WinsatTest("zh")
-	res := disktest.DDTest("zh")
+	// res := disktest.WinsatTest("zh", false)
+	res := disktest.DDTest("zh", false)
 	fmt.Println(res)
 	// fio test
 	// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435

@@ -10,7 +10,7 @@ import (
 )
 
 // WinsatTest 通过windows自带系统工具测试IO
-func WinsatTest(language string) string {
+func WinsatTest(language string, enableMultiCheck bool) string {
 	var result string
 	parts, err := disk.Partitions(true)
 	if err == nil {
@@ -19,12 +19,45 @@ func WinsatTest(language string) string {
 		} else {
 			result += "Test Disk               Random Read             Sequential Read         Sequential Write\n"
 		}
-		for _, f := range parts {
-			// winsat disk -drive 硬盘名字
-			cmd := exec.Command("winsat", "disk", "-drive", f.Device)
+		if enableMultiCheck {
+			for _, f := range parts {
+				// winsat disk -drive 硬盘名字
+				cmd := exec.Command("winsat", "disk", "-drive", f.Device)
+				output, err := cmd.Output()
+				if err == nil {
+					result += fmt.Sprintf("%-20s", f.Device) + "    "
+					tempList := strings.Split(string(output), "\n")
+					for _, l := range tempList {
+						if strings.Contains(l, "> Disk  Random 16.0 Read") {
+							// 随机读取速度
+							tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Random 16.0 Read", ""))
+							if tempText != "" {
+								tpList := strings.Split(tempText, "MB/s")
+								result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+							}
+						} else if strings.Contains(l, "> Disk  Sequential 64.0 Read") {
+							// 顺序读取速度
+							tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Sequential 64.0 Read", ""))
+							if tempText != "" {
+								tpList := strings.Split(tempText, "MB/s")
+								result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+							}
+						} else if strings.Contains(l, "> Disk  Sequential 64.0 Write") {
+							// 顺序写入速度
+							tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Sequential 64.0 Write", ""))
+							if tempText != "" {
+								tpList := strings.Split(tempText, "MB/s")
+								result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+							}
+						}
+					}
+				}
+			}
+		} else {
+			cmd := exec.Command("winsat", "disk", "-drive", "C:")
 			output, err := cmd.Output()
 			if err == nil {
-				result += fmt.Sprintf("%-20s", f.Device) + "    "
+				result += fmt.Sprintf("%-20s", "C:") + "    "
 				tempList := strings.Split(string(output), "\n")
 				for _, l := range tempList {
 					if strings.Contains(l, "> Disk  Random 16.0 Read") {
@@ -75,7 +108,7 @@ func isWritableMountpoint(path string) bool {
 }
 
 // DDTest 通过 dd 命令测试硬盘IO
-func DDTest(language string) string {
+func DDTest(language string, enableMultiCheck bool) string {
 	var (
 		result      string
 		devices     []string
@@ -92,10 +125,25 @@ func DDTest(language string) string {
 			}
 		}
 	}
-	fmt.Println(devices)
-	fmt.Println(mountPoints)
-	// https://github.com/spiritLHLS/ecs/blob/38f882433291384ec7e0aef8bd73349396139879/ecs.sh#L2056
-	// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
+	if enableMultiCheck {
+		for index, path := range mountPoints {
+			result += devices[index] + "     "
+			// dd if=/dev/zero of=/root/100MB.test bs=4k count=25600 oflag=direct
+			cmd := exec.Command("dd", "if=/dev/zero", "of="+path+"/100MB.test", "bs=4k", "count=25600", "oflag=direct")
+			output, err := cmd.Output()
+			if err == nil {
+				tempText := string(output)
+				fmt.Println(tempText)
+			}
+		}
+	} else {
+		cmd := exec.Command("dd", "if=/dev/zero", "of=/root/100MB.test", "bs=4k", "count=25600", "oflag=direct")
+		output, err := cmd.Output()
+		if err == nil {
+			tempText := string(output)
+			fmt.Println(tempText)
+		}
+	}
 	//25600+0 records in
 	//25600+0 records out
 	//104857600 bytes (105 MB, 100 MiB) copied, 15.034 s, 7.0 MB/s
