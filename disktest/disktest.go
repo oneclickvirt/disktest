@@ -134,9 +134,13 @@ func DDTest(language string, enableMultiCheck bool) string {
 			if err == nil {
 				tempText := string(output)
 				fmt.Println(index, "of="+path+"/100MB.test", tempText)
+				// IOPS （每秒输入/输出操作数），通过写入的块数除以写入所用的时间来计算
+				// 测试操作		写速度					读速度
+				// 100MB-4K Block		37.6 MB/s (9173 IOPS, 2.79s)		51.3 MB/s (12519 IOPS, 2.04s)
 			} else {
 				fmt.Println(err.Error())
 			}
+			result += "\n"
 		}
 	} else {
 		cmd := exec.Command("dd", "if=/dev/zero", "of=/root/100MB.test", "bs=4k", "count=25600", "oflag=direct")
