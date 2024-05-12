@@ -13,7 +13,7 @@ import (
 )
 
 // WinsatTest 通过windows自带系统工具测试IO
-func WinsatTest(language string, enableMultiCheck bool) string {
+func WinsatTest(language string, enableMultiCheck bool, testPath string) string {
 	var result string
 	parts, err := disk.Partitions(true)
 	if err == nil {
@@ -22,21 +22,26 @@ func WinsatTest(language string, enableMultiCheck bool) string {
 		} else {
 			result += "测试的硬盘                随机写入                  顺序读取                 顺序写入\n"
 		}
-		if enableMultiCheck {
-			for _, f := range parts {
-				result += fmt.Sprintf("%-20s", f.Device) + "    "
-				result += getDiskPerformance(f.Device)
+		if testPath == "" {
+			if enableMultiCheck {
+				for _, f := range parts {
+					result += fmt.Sprintf("%-20s", f.Device) + "    "
+					result += getDiskPerformance(f.Device)
+				}
+			} else {
+				result += fmt.Sprintf("%-20s", "C:") + "    "
+				result += getDiskPerformance("C:")
 			}
 		} else {
-			result += fmt.Sprintf("%-20s", "C:") + "    "
-			result += getDiskPerformance("C:")
+			result += fmt.Sprintf("%-20s", testPath) + "    "
+			result += getDiskPerformance(testPath)
 		}
 	}
 	return result
 }
 
 // DDTest 通过 dd 命令测试硬盘IO
-func DDTest(language string, enableMultiCheck bool) string {
+func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	var (
 		result      string
 		devices     []string
@@ -63,38 +68,105 @@ func DDTest(language string, enableMultiCheck bool) string {
 	blockSizes := []string{"4k", "1M"}
 	blockFiles := []string{"100MB.test", "1GB.test"}
 	for ind, bs := range blockSizes {
-		if enableMultiCheck {
-			for index, path := range mountPoints {
+		if testPath == "" {
+			if enableMultiCheck {
+				for index, path := range mountPoints {
+					// 写入测试
+					// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
+					cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of="+path+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+					defer os.Remove(path + blockFiles[ind])
+					stderr1, err := cmd1.StderrPipe()
+					if err == nil {
+						result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
+						if err := cmd1.Start(); err == nil {
+							outputBytes, err := io.ReadAll(stderr1)
+							if err == nil {
+								tempText := string(outputBytes)
+								result += parseResultDD(tempText)
+							}
+						}
+					}
+					// 读取测试
+					// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
+					cmd2 := exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+					defer os.Remove(path + blockFiles[ind])
+					stderr2, err := cmd2.StderrPipe()
+					if err == nil {
+						if err := cmd2.Start(); err == nil {
+							outputBytes, err := io.ReadAll(stderr2)
+							if err == nil {
+								tempText := string(outputBytes)
+								if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+									cmd2 = exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of="+path+"/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+									defer os.Remove(path + blockFiles[ind])
+									defer os.Remove(path + "/read" + blockFiles[ind])
+									stderr2, err = cmd2.StderrPipe()
+									if err == nil {
+										if err := cmd2.Start(); err == nil {
+											outputBytes, err := io.ReadAll(stderr2)
+											if err == nil {
+												tempText = string(outputBytes)
+											}
+										}
+									}
+								}
+								result += parseResultDD(tempText)
+							}
+						}
+					}
+					os.Remove(path + blockFiles[ind])
+					os.Remove(path + "/read" + blockFiles[ind])
+					result += "\n"
+				}
+			} else {
 				// 写入测试
-				// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
-				cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of="+path+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-				defer os.Remove(path + blockFiles[ind])
-				stderr1, err := cmd1.StderrPipe()
+				var testFilePath string
+				cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of=/root/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+				defer os.Remove("/root/" + blockFiles[ind])
+				testFilePath = "/root/"
+				stderr, err := cmd1.StderrPipe()
 				if err == nil {
-					result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
 					if err := cmd1.Start(); err == nil {
-						outputBytes, err := io.ReadAll(stderr1)
+						outputBytes, err := io.ReadAll(stderr)
 						if err == nil {
 							tempText := string(outputBytes)
+							if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+								cmd1 = exec.Command("sudo", "dd", "if=/dev/zero", "of=/tmp/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+								defer os.Remove("/tmp/" + blockFiles[ind])
+								testFilePath = "/tmp/"
+								stderr, err = cmd1.StderrPipe()
+								if err == nil {
+									if err := cmd1.Start(); err == nil {
+										outputBytes, err := io.ReadAll(stderr)
+										if err == nil {
+											tempText = string(outputBytes)
+											result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
+										}
+									}
+								}
+							} else {
+								result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
+							}
 							result += parseResultDD(tempText)
 						}
 					}
 				}
 				// 读取测试
-				// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
-				cmd2 := exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-				defer os.Remove(path + blockFiles[ind])
+				var tempText string
+				cmd2 := exec.Command("sudo", "dd", "if=/root/"+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+				defer os.Remove("/root/" + blockFiles[ind])
 				stderr2, err := cmd2.StderrPipe()
 				if err == nil {
 					if err := cmd2.Start(); err == nil {
 						outputBytes, err := io.ReadAll(stderr2)
 						if err == nil {
-							tempText := string(outputBytes)
+							tempText = string(outputBytes)
 							if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-								cmd2 = exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of="+path+"/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-								defer os.Remove(path + blockFiles[ind])
-								defer os.Remove(path + "/read" + blockFiles[ind])
-								stderr2, err = cmd2.StderrPipe()
+								// dd if=/root/100MB.test of=/tmp/read_100MB.test bs=4k count=25600 oflag=direct
+								cmd2 := exec.Command("sudo", "dd", "if="+testFilePath+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+								defer os.Remove(testFilePath + blockFiles[ind])
+								defer os.Remove("/tmp/read" + blockFiles[ind])
+								stderr2, err := cmd2.StderrPipe()
 								if err == nil {
 									if err := cmd2.Start(); err == nil {
 										outputBytes, err := io.ReadAll(stderr2)
@@ -104,20 +176,29 @@ func DDTest(language string, enableMultiCheck bool) string {
 									}
 								}
 							}
-							result += parseResultDD(tempText)
+						}
+					}
+				} else {
+					cmd2 := exec.Command("sudo", "dd", "if=/tmp/"+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+					defer os.Remove("/tmp/" + blockFiles[ind])
+					defer os.Remove("/tmp/read" + blockFiles[ind])
+					stderr2, err := cmd2.StderrPipe()
+					if err == nil {
+						if err := cmd2.Start(); err == nil {
+							outputBytes, err := io.ReadAll(stderr2)
+							if err == nil {
+								tempText = string(outputBytes)
+							}
 						}
 					}
 				}
-				os.Remove(path + blockFiles[ind])
-				os.Remove(path + "/read" + blockFiles[ind])
+				result += parseResultDD(tempText)
 				result += "\n"
 			}
 		} else {
 			// 写入测试
-			var testFilePath string
-			cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of=/root/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-			defer os.Remove("/root/" + blockFiles[ind])
-			testFilePath = "/root/"
+			cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of="+testPath+"/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+			defer os.Remove(testPath + "/" + blockFiles[ind])
 			stderr, err := cmd1.StderrPipe()
 			if err == nil {
 				if err := cmd1.Start(); err == nil {
@@ -125,19 +206,8 @@ func DDTest(language string, enableMultiCheck bool) string {
 					if err == nil {
 						tempText := string(outputBytes)
 						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-							cmd1 = exec.Command("sudo", "dd", "if=/dev/zero", "of=/tmp/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-							defer os.Remove("/tmp/" + blockFiles[ind])
-							testFilePath = "/tmp/"
-							stderr, err = cmd1.StderrPipe()
-							if err == nil {
-								if err := cmd1.Start(); err == nil {
-									outputBytes, err := io.ReadAll(stderr)
-									if err == nil {
-										tempText = string(outputBytes)
-										result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
-									}
-								}
-							}
+							result += fmt.Sprintf("%-10s", testPath) + "    " + fmt.Sprintf("%-15s", tempText) + "    \n"
+							return result
 						} else {
 							result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
 						}
@@ -147,8 +217,8 @@ func DDTest(language string, enableMultiCheck bool) string {
 			}
 			// 读取测试
 			var tempText string
-			cmd2 := exec.Command("sudo", "dd", "if=/root/"+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-			defer os.Remove("/root/" + blockFiles[ind])
+			cmd2 := exec.Command("sudo", "dd", "if="+testPath+"/"+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+			defer os.Remove(testPath + "/" + blockFiles[ind])
 			stderr2, err := cmd2.StderrPipe()
 			if err == nil {
 				if err := cmd2.Start(); err == nil {
@@ -156,35 +226,14 @@ func DDTest(language string, enableMultiCheck bool) string {
 					if err == nil {
 						tempText = string(outputBytes)
 						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-							// dd if=/root/100MB.test of=/tmp/read_100MB.test bs=4k count=25600 oflag=direct
-							cmd2 := exec.Command("sudo", "dd", "if="+testFilePath+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-							defer os.Remove(testFilePath + blockFiles[ind])
-							defer os.Remove("/tmp/read" + blockFiles[ind])
-							stderr2, err := cmd2.StderrPipe()
-							if err == nil {
-								if err := cmd2.Start(); err == nil {
-									outputBytes, err := io.ReadAll(stderr2)
-									if err == nil {
-										tempText = string(outputBytes)
-									}
-								}
-							}
+							result += fmt.Sprintf("%-15s", tempText) + "    \n"
+							return result
 						}
 					}
 				}
 			} else {
-				cmd2 := exec.Command("sudo", "dd", "if=/tmp/"+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-				defer os.Remove("/tmp/" + blockFiles[ind])
-				defer os.Remove("/tmp/read" + blockFiles[ind])
-				stderr2, err := cmd2.StderrPipe()
-				if err == nil {
-					if err := cmd2.Start(); err == nil {
-						outputBytes, err := io.ReadAll(stderr2)
-						if err == nil {
-							tempText = string(outputBytes)
-						}
-					}
-				}
+				result += fmt.Sprintf("%-15s", err.Error()) + "    \n"
+				return result
 			}
 			result += parseResultDD(tempText)
 			result += "\n"
@@ -202,7 +251,7 @@ func DDTest(language string, enableMultiCheck bool) string {
 //1048576000 bytes (1.0 GB, 1000 MiB) copied, 2.7358 s, 383 MB/s
 
 // FioTest 通过fio测试硬盘
-func FioTest(language string, enableMultiCheck bool) string {
+func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	var (
 		result, fioSize string
 		devices         []string
@@ -239,50 +288,52 @@ func FioTest(language string, enableMultiCheck bool) string {
 	} else {
 		fioSize = "512MB"
 	}
-	if enableMultiCheck {
-		for index, path := range mountPoints {
-			// 生成对应文件
-			// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435
-			// fio --name=setup --ioengine=libaio --rw=read --bs=64k --iodepth=64 --numjobs=2 --size=512MB --runtime=1 --gtod_reduce=1 --filename="/tmp/test.fio" --direct=1 --minimal
-			cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
-				"--filename=\""+path+"/test.fio\"", "--direct=1", "--minimal")
-			defer os.Remove(path + "/test.fio")
-			stderr1, err := cmd1.StderrPipe()
-			if err == nil {
-				if err := cmd1.Start(); err == nil {
-					_, err := io.ReadAll(stderr1)
-					if err == nil {
-						// 测试
-						blockSizes := []string{"4k", "64k", "512k", "1m"}
-						for _, BS := range blockSizes {
-							// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
-							cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
-							output, err := cmd2.Output()
-							if err == nil {
-								tempText := string(output)
-								tempList := strings.Split(tempText, "\n")
-								for _, l := range tempList {
-									if strings.Contains(l, "rand_rw_"+BS) {
-										tpList := strings.Split(l, ";")
-										// IOPS
-										DISK_IOPS_R := tpList[8]
-										DISK_IOPS_W := tpList[49]
-										DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
-										DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
-										DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
-										// Speed
-										DISK_TEST_R := tpList[7]
-										DISK_TEST_W := tpList[48]
-										DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
-										DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
-										DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
-										// 拼接输出文本
-										result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    "
-										result += fmt.Sprintf("%-5s", BS) + "    "
-										result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
-										result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
-										result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
-										result += "\n"
+	if testPath == "" {
+		if enableMultiCheck {
+			for index, path := range mountPoints {
+				// 生成对应文件
+				// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435
+				// fio --name=setup --ioengine=libaio --rw=read --bs=64k --iodepth=64 --numjobs=2 --size=512MB --runtime=1 --gtod_reduce=1 --filename="/tmp/test.fio" --direct=1 --minimal
+				cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
+					"--filename=\""+path+"/test.fio\"", "--direct=1", "--minimal")
+				defer os.Remove(path + "/test.fio")
+				stderr1, err := cmd1.StderrPipe()
+				if err == nil {
+					if err := cmd1.Start(); err == nil {
+						_, err := io.ReadAll(stderr1)
+						if err == nil {
+							// 测试
+							blockSizes := []string{"4k", "64k", "512k", "1m"}
+							for _, BS := range blockSizes {
+								// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
+								cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
+								output, err := cmd2.Output()
+								if err == nil {
+									tempText := string(output)
+									tempList := strings.Split(tempText, "\n")
+									for _, l := range tempList {
+										if strings.Contains(l, "rand_rw_"+BS) {
+											tpList := strings.Split(l, ";")
+											// IOPS
+											DISK_IOPS_R := tpList[8]
+											DISK_IOPS_W := tpList[49]
+											DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
+											DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
+											DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
+											// Speed
+											DISK_TEST_R := tpList[7]
+											DISK_TEST_W := tpList[48]
+											DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
+											DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
+											DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
+											// 拼接输出文本
+											result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    "
+											result += fmt.Sprintf("%-5s", BS) + "    "
+											result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
+											result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
+											result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
+											result += "\n"
+										}
 									}
 								}
 							}
@@ -290,13 +341,77 @@ func FioTest(language string, enableMultiCheck bool) string {
 					}
 				}
 			}
+		} else {
+			var buildPath string
+			// 生成对应文件
+			cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
+				"--filename=\"/root/test.fio\"", "--direct=1", "--minimal")
+			defer os.Remove("/root/test.fio")
+			stderr, err := cmd1.StderrPipe()
+			if err == nil {
+				if err := cmd1.Start(); err == nil {
+					outputBytes, err := io.ReadAll(stderr)
+					if err == nil {
+						tempText := string(outputBytes)
+						if strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
+							cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
+								"--filename=\"/tmp/test.fio\"", "--direct=1", "--minimal")
+							defer os.Remove("/tmp/test.fio")
+							_, err = cmd1.StderrPipe()
+							if err == nil {
+								if err := cmd1.Start(); err == nil {
+									buildPath = "/tmp"
+								}
+							}
+						} else {
+							buildPath = "/root"
+						}
+					}
+				}
+			}
+			if buildPath != "" {
+				// 测试
+				blockSizes := []string{"4k", "64k", "512k", "1m"}
+				for _, BS := range blockSizes {
+					// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
+					cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+buildPath+"/test.fio\"", "--group_reporting", "--minimal")
+					output, err := cmd2.Output()
+					if err == nil {
+						tempText := string(output)
+						tempList := strings.Split(tempText, "\n")
+						for _, l := range tempList {
+							if strings.Contains(l, "rand_rw_"+BS) {
+								tpList := strings.Split(l, ";")
+								// IOPS
+								DISK_IOPS_R := tpList[8]
+								DISK_IOPS_W := tpList[49]
+								DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
+								DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
+								DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
+								// Speed
+								DISK_TEST_R := tpList[7]
+								DISK_TEST_W := tpList[48]
+								DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
+								DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
+								DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
+								// 拼接输出文本
+								result += fmt.Sprintf("%-10s", buildPath) + "    "
+								result += fmt.Sprintf("%-5s", BS) + "    "
+								result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
+								result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
+								result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
+								result += "\n"
+							}
+						}
+					}
+				}
+			}
 		}
 	} else {
-		var buildPath string
 		// 生成对应文件
 		cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
-			"--filename=\"/root/test.fio\"", "--direct=1", "--minimal")
-		defer os.Remove("/root/test.fio")
+			"--filename=\""+testPath+"/test.fio\"", "--direct=1", "--minimal")
+		defer os.Remove(testPath + "/test.fio")
 		stderr, err := cmd1.StderrPipe()
 		if err == nil {
 			if err := cmd1.Start(); err == nil {
@@ -304,54 +419,42 @@ func FioTest(language string, enableMultiCheck bool) string {
 				if err == nil {
 					tempText := string(outputBytes)
 					if strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
-						cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
-							"--filename=\"/tmp/test.fio\"", "--direct=1", "--minimal")
-						defer os.Remove("/tmp/test.fio")
-						_, err = cmd1.StderrPipe()
-						if err == nil {
-							if err := cmd1.Start(); err == nil {
-								buildPath = "/tmp"
-							}
-						}
-					} else {
-						buildPath = "/root"
+						return tempText
 					}
 				}
 			}
 		}
-		if buildPath != "" {
-			// 测试
-			blockSizes := []string{"4k", "64k", "512k", "1m"}
-			for _, BS := range blockSizes {
-				// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
-				cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+buildPath+"/test.fio\"", "--group_reporting", "--minimal")
-				output, err := cmd2.Output()
-				if err == nil {
-					tempText := string(output)
-					tempList := strings.Split(tempText, "\n")
-					for _, l := range tempList {
-						if strings.Contains(l, "rand_rw_"+BS) {
-							tpList := strings.Split(l, ";")
-							// IOPS
-							DISK_IOPS_R := tpList[8]
-							DISK_IOPS_W := tpList[49]
-							DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
-							DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
-							DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
-							// Speed
-							DISK_TEST_R := tpList[7]
-							DISK_TEST_W := tpList[48]
-							DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
-							DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
-							DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
-							// 拼接输出文本
-							result += fmt.Sprintf("%-10s", buildPath) + "    "
-							result += fmt.Sprintf("%-5s", BS) + "    "
-							result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
-							result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
-							result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
-							result += "\n"
-						}
+		// 测试
+		blockSizes := []string{"4k", "64k", "512k", "1m"}
+		for _, BS := range blockSizes {
+			// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
+			cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+testPath+"/test.fio\"", "--group_reporting", "--minimal")
+			output, err := cmd2.Output()
+			if err == nil {
+				tempText := string(output)
+				tempList := strings.Split(tempText, "\n")
+				for _, l := range tempList {
+					if strings.Contains(l, "rand_rw_"+BS) {
+						tpList := strings.Split(l, ";")
+						// IOPS
+						DISK_IOPS_R := tpList[8]
+						DISK_IOPS_W := tpList[49]
+						DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
+						DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
+						DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
+						// Speed
+						DISK_TEST_R := tpList[7]
+						DISK_TEST_W := tpList[48]
+						DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
+						DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
+						DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
+						// 拼接输出文本
+						result += fmt.Sprintf("%-10s", testPath) + "    "
+						result += fmt.Sprintf("%-5s", BS) + "    "
+						result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
+						result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
+						result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
+						result += "\n"
 					}
 				}
 			}

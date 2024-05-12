@@ -20,8 +20,9 @@ func main() {
 	languagePtr := flag.String("l", "", "Language parameter (en or zh)")
 	testMethodPtr := flag.String("m", "", "Specific Test Method (dd or fio)")
 	multiDiskPtr := flag.String("d", "", "Enable multi disk check parameter (single or multi, default is single)")
+	testPathPtr := flag.String("p", "", "Specific Test Disk Path (default is /root or C:)")
 	flag.Parse()
-	var language, res, testMethod string
+	var language, res, testMethod, testPath string
 	var isMultiCheck bool
 	if *languagePtr == "" {
 		language = "zh"
@@ -38,21 +39,26 @@ func main() {
 	} else if *testMethodPtr == "fio" {
 		testMethod = "fio"
 	}
+	if *testPathPtr == "" {
+		testPath = ""
+	} else if *testPathPtr != "" {
+		testPath = strings.TrimSpace(strings.ToLower(*testPathPtr))
+	}
 	if runtime.GOOS == "windows" {
-		res = disktest.WinsatTest(language, isMultiCheck) // BUG
+		res = disktest.WinsatTest(language, isMultiCheck, testPath)
 	} else {
 		if testMethod == "fio" {
-			res = disktest.FioTest(language, isMultiCheck)
+			res = disktest.FioTest(language, isMultiCheck, testPath)
 			if language == "zh" {
 				fmt.Println("由于检测到fio测试会失败，自动替换为dd进行测试")
 			} else {
 				fmt.Println("Since the fio test was detected as failing, it was automatically replaced with dd for the test")
 			}
 			if res == "" {
-				res = disktest.DDTest(language, isMultiCheck)
+				res = disktest.DDTest(language, isMultiCheck, testPath)
 			}
 		} else if testMethod == "dd" {
-			res = disktest.DDTest(language, isMultiCheck)
+			res = disktest.DDTest(language, isMultiCheck, testPath)
 		}
 	}
 	fmt.Println("--------------------------------------------------")
