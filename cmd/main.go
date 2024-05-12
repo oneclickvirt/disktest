@@ -49,14 +49,6 @@ func main() {
 	} else {
 		if testMethod == "fio" {
 			res = disktest.FioTest(language, isMultiCheck, testPath)
-			if language == "zh" {
-				fmt.Println("由于检测到fio测试会失败，自动替换为dd进行测试")
-			} else {
-				fmt.Println("Since the fio test was detected as failing, it was automatically replaced with dd for the test")
-			}
-			if res == "" {
-				res = disktest.DDTest(language, isMultiCheck, testPath)
-			}
 		} else if testMethod == "dd" {
 			res = disktest.DDTest(language, isMultiCheck, testPath)
 		}
