@@ -2,9 +2,7 @@
 
 [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Foneclickvirt%2FdiskTest&count_bg=%2379C83D&title_bg=%23555555&icon=sonarcloud.svg&icon_color=%2345FFC2&title=hits&edge_flat=false)](https://hits.seeyoufarm.com) [![Build and Release](https://github.com/oneclickvirt/diskTest/actions/workflows/main.yaml/badge.svg)](https://github.com/oneclickvirt/diskTest/actions/workflows/main.yaml)
 
-硬盘IO测试
-
-开发中，请勿使用
+硬盘IO测试 (Disk IO Test)
 
 ## 功能
 
@@ -18,7 +16,7 @@
 
 ## 使用
 
-更新时间：
+更新时间：2024.05.12
 
 ```shell
 curl https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_install.sh -sSf | sh
