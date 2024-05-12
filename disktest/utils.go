@@ -77,6 +77,7 @@ func parseResultDD(tempText, blockCount string) string {
 			if len(tp2) == 4 {
 				usageTime, _ = strconv.ParseFloat(strings.Split(strings.TrimSpace(tp2[2]), " ")[0], 64)
 				ioSpeed := strings.Split(strings.TrimSpace(tp2[3]), " ")[0]
+				ioSpeedFlat := strings.Split(strings.TrimSpace(tp2[3]), " ")[1]
 				iops := records / usageTime
 				var iopsText string
 				if iops >= 1000 {
@@ -84,7 +85,7 @@ func parseResultDD(tempText, blockCount string) string {
 				} else {
 					iopsText = strconv.FormatFloat(iops, 'f', 2, 64) + " IOPS, " + strconv.FormatFloat(usageTime, 'f', 2, 64) + "s"
 				}
-				result += fmt.Sprintf("%-30s", strings.TrimSpace(ioSpeed)+" MB/s("+iopsText+")") + "    "
+				result += fmt.Sprintf("%-30s", strings.TrimSpace(ioSpeed)+" " + ioSpeedFlat + "("+iopsText+")") + "    "
 			}
 		}
 	}
