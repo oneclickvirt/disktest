@@ -16,7 +16,7 @@ func main() {
 	}()
 	fmt.Println("项目地址:", "https://github.com/oneclickvirt/diskTest")
 	// go run main.go -l en -d multi
-	// go run main.go -l en -d single BUG
+	// go run main.go -l en -d single
 	languagePtr := flag.String("l", "", "Language parameter (en or zh)")
 	multiDiskPtr := flag.String("d", "", "Enable multi disk check parameter (single or multi, default is single)")
 	flag.Parse()

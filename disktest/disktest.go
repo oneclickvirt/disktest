@@ -58,38 +58,109 @@ func DDTest(language string, enableMultiCheck bool) string {
 	} else {
 		result += "测试路径      块大小             直接写入                          直接读取\n"
 	}
-	if enableMultiCheck {
-		for index, path := range mountPoints {
+	blockNames := []string{"100MB-4K Block", "1GB-1M Block"}
+	blockCounts := []string{"25600", "1000"}
+	blockSizes := []string{"4k", "1M"}
+	blockFiles := []string{"100MB.test", "1GB.test"}
+	for ind, bs := range blockSizes {
+		if enableMultiCheck {
+			for index, path := range mountPoints {
+				// 写入测试
+				// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
+				cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of="+path+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+				defer os.Remove(path + blockFiles[ind])
+				stderr1, err := cmd1.StderrPipe()
+				if err == nil {
+					result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
+					if err := cmd1.Start(); err == nil {
+						outputBytes, err := io.ReadAll(stderr1)
+						if err == nil {
+							tempText := string(outputBytes)
+							result += parseResultDD(tempText)
+						}
+					}
+				}
+				// 读取测试
+				// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
+				cmd2 := exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+				defer os.Remove(path + blockFiles[ind])
+				stderr2, err := cmd2.StderrPipe()
+				if err == nil {
+					if err := cmd2.Start(); err == nil {
+						outputBytes, err := io.ReadAll(stderr2)
+						if err == nil {
+							tempText := string(outputBytes)
+							if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+								cmd2 = exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of="+path+"/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+								defer os.Remove(path + blockFiles[ind])
+								defer os.Remove(path + "/read" + blockFiles[ind])
+								stderr2, err = cmd2.StderrPipe()
+								if err == nil {
+									if err := cmd2.Start(); err == nil {
+										outputBytes, err := io.ReadAll(stderr2)
+										if err == nil {
+											tempText = string(outputBytes)
+										}
+									}
+								}
+							}
+							result += parseResultDD(tempText)
+						}
+					}
+				}
+				os.Remove(path + blockFiles[ind])
+				os.Remove(path + "/read" + blockFiles[ind])
+				result += "\n"
+			}
+		} else {
 			// 写入测试
-			// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
-			cmd1 := exec.Command("dd", "if=/dev/zero", "of="+path+"/100MB.test", "bs=4k", "count=25600", "oflag=direct")
-			defer os.Remove(path + "/100MB.test")
-			stderr1, err := cmd1.StderrPipe()
+			var testFilePath string
+			cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of=/root/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+			defer os.Remove("/root/" + blockFiles[ind])
+			testFilePath = "/root/"
+			stderr, err := cmd1.StderrPipe()
 			if err == nil {
-				result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
 				if err := cmd1.Start(); err == nil {
-					outputBytes, err := io.ReadAll(stderr1)
+					outputBytes, err := io.ReadAll(stderr)
 					if err == nil {
 						tempText := string(outputBytes)
+						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+							cmd1 = exec.Command("sudo", "dd", "if=/dev/zero", "of=/tmp/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+							defer os.Remove("/tmp/" + blockFiles[ind])
+							testFilePath = "/tmp/"
+							stderr, err = cmd1.StderrPipe()
+							if err == nil {
+								if err := cmd1.Start(); err == nil {
+									outputBytes, err := io.ReadAll(stderr)
+									if err == nil {
+										tempText = string(outputBytes)
+										result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
+									}
+								}
+							}
+						} else {
+							result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
+						}
 						result += parseResultDD(tempText)
 					}
 				}
 			}
 			// 读取测试
-			// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
-			cmd2 := exec.Command("dd", "if="+path+"/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
-			defer os.Remove(path + "/100MB.test")
+			var tempText string
+			cmd2 := exec.Command("sudo", "dd", "if=/root/"+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+			defer os.Remove("/root/" + blockFiles[ind])
 			stderr2, err := cmd2.StderrPipe()
 			if err == nil {
 				if err := cmd2.Start(); err == nil {
 					outputBytes, err := io.ReadAll(stderr2)
 					if err == nil {
-						tempText := string(outputBytes)
+						tempText = string(outputBytes)
 						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-							cmd2 = exec.Command("dd", "if="+path+"/100MB.test", "of="+path+"/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
-							defer os.Remove(path + "/100MB.test")
-							defer os.Remove(path + "/100MB_read.test")
-							stderr2, err = cmd2.StderrPipe()
+							// dd if=/root/100MB.test of=/tmp/read_100MB.test bs=4k count=25600 oflag=direct
+							cmd2 := exec.Command("sudo", "dd", "if="+testFilePath+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+							defer os.Remove(testFilePath + blockFiles[ind])
+							defer os.Remove("/tmp/read" + blockFiles[ind])
+							stderr2, err := cmd2.StderrPipe()
 							if err == nil {
 								if err := cmd2.Start(); err == nil {
 									outputBytes, err := io.ReadAll(stderr2)
@@ -99,75 +170,25 @@ func DDTest(language string, enableMultiCheck bool) string {
 								}
 							}
 						}
-						result += parseResultDD(tempText)
+					}
+				}
+			} else {
+				cmd2 := exec.Command("sudo", "dd", "if=/tmp/"+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
+				defer os.Remove("/tmp/" + blockFiles[ind])
+				defer os.Remove("/tmp/read" + blockFiles[ind])
+				stderr2, err := cmd2.StderrPipe()
+				if err == nil {
+					if err := cmd2.Start(); err == nil {
+						outputBytes, err := io.ReadAll(stderr2)
+						if err == nil {
+							tempText = string(outputBytes)
+						}
 					}
 				}
 			}
-			os.Remove(path + "/100MB.test")
-			os.Remove(path + "/100MB_read.test")
+			result += parseResultDD(tempText)
 			result += "\n"
 		}
-	} else {
-		// 写入测试
-		cmd1 := exec.Command("dd", "if=/dev/zero", "of=/root/100MB.test", "bs=4k", "count=25600", "oflag=direct")
-		defer os.Remove("/root/100MB.test")
-		stderr, err := cmd1.StderrPipe()
-		if err == nil {
-			if err := cmd1.Start(); err == nil {
-				outputBytes, err := io.ReadAll(stderr)
-				if err == nil {
-					tempText := string(outputBytes)
-					if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-						if err == nil {
-							cmd1 = exec.Command("dd", "if=/tmp/100MB.test", "of=/tmp/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
-							defer os.Remove("/tmp/100MB.test")
-							defer os.Remove("/tmp/100MB_read.test")
-							stderr, err = cmd1.StderrPipe()
-							if err == nil {
-								if err := cmd1.Start(); err == nil {
-									outputBytes, err := io.ReadAll(stderr)
-									if err == nil {
-										tempText = string(outputBytes)
-										result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
-									}
-								}
-							}
-						}
-					} else {
-						result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
-					}
-					result += parseResultDD(tempText)
-				}
-			}
-		}
-		// 读取测试
-		cmd2 := exec.Command("dd", "if=/root/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
-		defer os.Remove("/root/100MB.test")
-		stderr2, err := cmd2.StderrPipe()
-		if err == nil {
-			if err := cmd2.Start(); err == nil {
-				outputBytes, err := io.ReadAll(stderr2)
-				if err == nil {
-					tempText := string(outputBytes)
-					if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-						cmd2 = exec.Command("dd", "if=/tmp/100MB.test", "of=/tmp/100MB_read.test", "bs=4k", "count=25600", "oflag=direct")
-						defer os.Remove("/tmp/100MB.test")
-						defer os.Remove("/tmp/100MB_read.test")
-						stderr2, err = cmd2.StderrPipe()
-						if err == nil {
-							if err := cmd2.Start(); err == nil {
-								outputBytes, err := io.ReadAll(stderr2)
-								if err == nil {
-									tempText = string(outputBytes)
-								}
-							}
-						}
-					}
-					result += parseResultDD(tempText)
-				}
-			}
-		}
-		result += "\n"
 	}
 	return result
 }
