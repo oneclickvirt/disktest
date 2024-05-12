@@ -16,6 +16,7 @@ func main() {
 	}()
 	fmt.Println("项目地址:", "https://github.com/oneclickvirt/diskTest")
 	// go run main.go -l en -d multi
+	// go run main.go -l en -d single BUG
 	languagePtr := flag.String("l", "", "Language parameter (en or zh)")
 	multiDiskPtr := flag.String("d", "", "Enable multi disk check parameter (single or multi, default is single)")
 	flag.Parse()
@@ -33,7 +34,7 @@ func main() {
 	}
 	language = strings.ToLower(language)
 	if runtime.GOOS == "windows" {
-		res = disktest.WinsatTest(language, isMultiCheck)
+		res = disktest.WinsatTest(language, isMultiCheck) // BUG
 	} else {
 		res = disktest.FioTest(language, isMultiCheck)
 		if res == "" {
