@@ -72,7 +72,7 @@ jobs:
 
     strategy:
       matrix:
-        goos: [windows, freebsd, openbsd, linux, darwin]
+        goos: [windows, freebsd, linux, darwin]
         goarch: [amd64, 386]
         exclude:
           - goarch: 386
@@ -113,11 +113,11 @@ jobs:
           - goos: freebsd
             goarch: arm
             goarm: 7
-          - goos: openbsd
-            goarch: arm64
-          - goos: openbsd
-            goarch: arm
-            goarm: 7
+          # - goos: openbsd
+          #   goarch: arm64
+          # - goos: openbsd
+          #   goarch: arm
+          #   goarm: 7
           # - goos: linux
           #   goarch: mipsle
           #   gomips: softfloat
