@@ -219,15 +219,26 @@ func FioTest(language string, enableMultiCheck bool) string {
 			defer os.Remove(path + "/test.fio")
 			stderr1, err := cmd1.StderrPipe()
 			if err == nil {
-				// result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
-				// if err := cmd1.Start(); err == nil {
-				// 	outputBytes, err := io.ReadAll(stderr1)
-				// 	if err == nil {
-				// 		tempText := string(outputBytes)
-				// 		result += parseResultDD(tempText)
-				// 	}
-				// }
+				if err := cmd1.Start(); err == nil {
+					outputBytes, err := io.ReadAll(stderr1)
+					if err == nil {
+						tempText := string(outputBytes)
+						result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
+					} else {
+						return ""
+					}
+				} else {
+					return ""
+				}
+			} else {
+				return ""
 			}
+		}
+		blockSizes := []string{"4k", "64k", "512k", "1m"}
+		for _, BS := range blockSizes {
+			fmt.Println(blockSize)
+			// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=2G --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
+			cmd2 := exec.Command("timeout", "35", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
 		}
 	}
 	return result
