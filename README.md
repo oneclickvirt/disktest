@@ -36,11 +36,11 @@ curl https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_insta
 
 dd测试：
 
-![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/2a50c6a1-046d-499a-af64-bf352fd63cd7)
+![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/163b1150-dc45-4d53-abbf-c6e1acca4e19)
 
 fio测试：
 
-![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/038cd588-5911-446d-9caf-70a53d216aa5)
+![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/3052b430-2d93-4a07-9e12-0a911ffb36c3)
 
 winsat测试：
 
