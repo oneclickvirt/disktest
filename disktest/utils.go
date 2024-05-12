@@ -88,3 +88,73 @@ func parseResultDD(tempText string) string {
 	}
 	return result
 }
+
+// formatIOPS 转换fio的测试中的IOPS的值
+// rawType 支持 string 或 int
+func formatIOPS(raw interface{}, rawType string) string {
+	// Ensure raw value is not empty, if it is, return blank
+	var iops int
+	var err error
+	if rawType == "string" {
+		if raw.(string) == "" {
+			return ""
+		}
+		// Convert raw string to integer
+		iops, err = strconv.Atoi(raw.(string))
+		if err != nil {
+			return ""
+		}
+	} else if rawType == "int" {
+		iops = raw.(int)
+	} else {
+		return ""
+	}
+	// Check if IOPS speed > 1k
+	if iops >= 1000 {
+		// Divide the raw result by 1k
+		result := float64(iops) / 1000.0
+		// Shorten the formatted result to one decimal place (i.e. x.x)
+		resultStr := fmt.Sprintf("%.1fk", result)
+		return resultStr
+	}
+	// If IOPS speed <= 1k, return the original value
+	return raw.(string)
+}
+
+// formatSpeed 转换fio的测试中的TEST的值
+// rawType 支持 string 或 float64
+func formatSpeed(raw interface{}, rawType string) string {
+	var rawFloat float64
+	var err error
+	if rawType == "string" {
+		if raw.(string) == "" {
+			return ""
+		}
+		// disk speed in KB/s
+		rawFloat, err = strconv.ParseFloat(raw.(string), 64)
+		if err != nil {
+			return ""
+		}
+	} else if rawType == "float64" {
+		rawFloat = raw.(float64)
+	} else {
+		return ""
+	}
+	var resultFloat float64 = rawFloat
+	var denom float64 = 1
+	unit := "KB/s"
+	// check if disk speed >= 1 GB/s
+	if rawFloat >= 1000000 {
+		denom = 1000000
+		unit = "GB/s"
+	} else if rawFloat >= 1000 { // check if disk speed < 1 GB/s && >= 1 MB/s
+		denom = 1000
+		unit = "MB/s"
+	}
+	// divide the raw result to get the corresponding formatted result (based on determined unit)
+	resultFloat /= denom
+	// shorten the formatted result to two decimal places (i.e. x.xx)
+	result := fmt.Sprintf("%.2f", resultFloat)
+	// concat formatted result value with units and return result
+	return strings.Join([]string{result, unit}, " ")
+}

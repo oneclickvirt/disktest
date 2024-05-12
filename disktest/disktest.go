@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/shirou/gopsutil/disk"
@@ -223,27 +224,37 @@ func FioTest(language string, enableMultiCheck bool) string {
 					_, err := io.ReadAll(stderr1)
 					if err == nil {
 						result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
-						// 读取测试
+						// 测试
 						blockSizes := []string{"4k", "64k", "512k", "1m"}
 						for _, BS := range blockSizes {
-							// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=2G --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
-							cmd2 := exec.Command("timeout", "35", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
-							stderr2, err := cmd2.StderrPipe()
+							// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
+							cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
+							output, err := cmd2.Output()
 							if err == nil {
-								if err := cmd2.Start(); err == nil {
-									outputBytes, err := io.ReadAll(stderr2)
-									if err == nil {
-										tempText := string(outputBytes)
-										tempList := strings.Split(tempText, "\n")
-										for _, l := range tempList {
-											if strings.Contains(l, "rand_rw_"+BS) {
-												fmt.Println(l)
-											}
-										}
+								tempText := string(output)
+								tempList := strings.Split(tempText, "\n")
+								for _, l := range tempList {
+									if strings.Contains(l, "rand_rw_"+BS) {
+										tpList := strings.Split(l, ";")
+										// IOPS
+										DISK_IOPS_R := tpList[8]
+										DISK_IOPS_W := tpList[49]
+										DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
+										DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
+										DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
+										fmt.Println(formatIOPS(DISK_IOPS, "int"))
+										// Speed
+										DISK_TEST_R := tpList[7]
+										DISK_TEST_W := tpList[48]
+										DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
+										DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
+										DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
+										fmt.Println(formatSpeed(DISK_TEST, "float64"))
 									}
 								}
 							}
 						}
+						result += "\n"
 					} else {
 						return ""
 					}
