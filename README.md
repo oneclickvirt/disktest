@@ -26,3 +26,15 @@ curl https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_insta
 ```
 
 更多架构请查看 https://github.com/oneclickvirt/diskTest/releases/tag/output
+
+dd测试：
+
+![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/2a50c6a1-046d-499a-af64-bf352fd63cd7)
+
+fio测试：
+
+![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/038cd588-5911-446d-9caf-70a53d216aa5)
+
+winsat测试：
+
+![1715511065979](https://github.com/oneclickvirt/diskTest/assets/103393591/952f6a58-ed9c-4b77-9a33-1a09fa4f1f29)
