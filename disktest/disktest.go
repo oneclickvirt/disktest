@@ -40,6 +40,60 @@ func WinsatTest(language string, enableMultiCheck bool, testPath string) string 
 	return result
 }
 
+// ddTest1 无重试机制
+func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) string {
+	var result string
+	// 写入测试
+	// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
+	tempText, err := execDDTest("/dev/zero", path+blockFile, bs, blockCount)
+	defer os.Remove(path + blockFile)
+	if err == nil {
+		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		result += parseResultDD(tempText)
+	}
+	// 读取测试
+	// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
+	tempText, err = execDDTest(path+blockFile, "/dev/null", bs, blockCount)
+	defer os.Remove(path + blockFile)
+	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+		tempText, _ = execDDTest(path+blockFile, path+"/read"+blockFile, bs, blockCount)
+		defer os.Remove(path + "/read" + blockFile)
+	}
+	result += parseResultDD(tempText)
+	result += "\n"
+	return result
+}
+
+// ddTest2 有重试机制，重试至于 /tmp 目录
+func ddTest2(blockFile, blockName, blockCount, bs string) string {
+	var result string
+	// 写入测试
+	var testFilePath string
+	tempText, err := execDDTest("/dev/zero", "/root/"+blockFile, bs, blockCount)
+	defer os.Remove("/root/" + blockFile)
+	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+		tempText, _ = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
+		defer os.Remove("/tmp/" + blockFile)
+		testFilePath = "/tmp/"
+		result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+	} else {
+		testFilePath = "/root/"
+		result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+	}
+	result += parseResultDD(tempText)
+	// 读取测试
+	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
+	defer os.Remove("/root/" + blockFile)
+	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+		tempText, _ = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
+		defer os.Remove(testFilePath + blockFile)
+		defer os.Remove("/tmp/read" + blockFile)
+	}
+	result += parseResultDD(tempText)
+	result += "\n"
+	return result
+}
+
 // DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	var (
@@ -71,184 +125,17 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		if testPath == "" {
 			if enableMultiCheck {
 				for index, path := range mountPoints {
-					// 写入测试
-					// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
-					cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of="+path+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-					defer os.Remove(path + blockFiles[ind])
-					stderr1, err := cmd1.StderrPipe()
-					if err == nil {
-						result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
-						if err := cmd1.Start(); err == nil {
-							outputBytes, err := io.ReadAll(stderr1)
-							if err == nil {
-								tempText := string(outputBytes)
-								result += parseResultDD(tempText)
-							}
-						}
-					}
-					// 读取测试
-					// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
-					cmd2 := exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-					defer os.Remove(path + blockFiles[ind])
-					stderr2, err := cmd2.StderrPipe()
-					if err == nil {
-						if err := cmd2.Start(); err == nil {
-							outputBytes, err := io.ReadAll(stderr2)
-							if err == nil {
-								tempText := string(outputBytes)
-								if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-									cmd2 = exec.Command("sudo", "dd", "if="+path+blockFiles[ind], "of="+path+"/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-									defer os.Remove(path + blockFiles[ind])
-									defer os.Remove(path + "/read" + blockFiles[ind])
-									stderr2, err = cmd2.StderrPipe()
-									if err == nil {
-										if err := cmd2.Start(); err == nil {
-											outputBytes, err := io.ReadAll(stderr2)
-											if err == nil {
-												tempText = string(outputBytes)
-											}
-										}
-									}
-								}
-								result += parseResultDD(tempText)
-							}
-						}
-					}
-					os.Remove(path + blockFiles[ind])
-					os.Remove(path + "/read" + blockFiles[ind])
-					result += "\n"
+					result += ddTest1(path, devices[index], blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 				}
 			} else {
-				// 写入测试
-				var testFilePath string
-				cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of=/root/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-				defer os.Remove("/root/" + blockFiles[ind])
-				testFilePath = "/root/"
-				stderr, err := cmd1.StderrPipe()
-				if err == nil {
-					if err := cmd1.Start(); err == nil {
-						outputBytes, err := io.ReadAll(stderr)
-						if err == nil {
-							tempText := string(outputBytes)
-							if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-								cmd1 = exec.Command("sudo", "dd", "if=/dev/zero", "of=/tmp/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-								defer os.Remove("/tmp/" + blockFiles[ind])
-								testFilePath = "/tmp/"
-								stderr, err = cmd1.StderrPipe()
-								if err == nil {
-									if err := cmd1.Start(); err == nil {
-										outputBytes, err := io.ReadAll(stderr)
-										if err == nil {
-											tempText = string(outputBytes)
-											result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
-										}
-									}
-								}
-							} else {
-								result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
-							}
-							result += parseResultDD(tempText)
-						}
-					}
-				}
-				// 读取测试
-				var tempText string
-				cmd2 := exec.Command("sudo", "dd", "if=/root/"+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-				defer os.Remove("/root/" + blockFiles[ind])
-				stderr2, err := cmd2.StderrPipe()
-				if err == nil {
-					if err := cmd2.Start(); err == nil {
-						outputBytes, err := io.ReadAll(stderr2)
-						if err == nil {
-							tempText = string(outputBytes)
-							if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-								// dd if=/root/100MB.test of=/tmp/read_100MB.test bs=4k count=25600 oflag=direct
-								cmd2 := exec.Command("sudo", "dd", "if="+testFilePath+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-								defer os.Remove(testFilePath + blockFiles[ind])
-								defer os.Remove("/tmp/read" + blockFiles[ind])
-								stderr2, err := cmd2.StderrPipe()
-								if err == nil {
-									if err := cmd2.Start(); err == nil {
-										outputBytes, err := io.ReadAll(stderr2)
-										if err == nil {
-											tempText = string(outputBytes)
-										}
-									}
-								}
-							}
-						}
-					}
-				} else {
-					cmd2 := exec.Command("sudo", "dd", "if=/tmp/"+blockFiles[ind], "of=/tmp/read"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-					defer os.Remove("/tmp/" + blockFiles[ind])
-					defer os.Remove("/tmp/read" + blockFiles[ind])
-					stderr2, err := cmd2.StderrPipe()
-					if err == nil {
-						if err := cmd2.Start(); err == nil {
-							outputBytes, err := io.ReadAll(stderr2)
-							if err == nil {
-								tempText = string(outputBytes)
-							}
-						}
-					}
-				}
-				result += parseResultDD(tempText)
-				result += "\n"
+				result += ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 			}
 		} else {
-			// 写入测试
-			cmd1 := exec.Command("sudo", "dd", "if=/dev/zero", "of="+testPath+"/"+blockFiles[ind], "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-			defer os.Remove(testPath + "/" + blockFiles[ind])
-			stderr, err := cmd1.StderrPipe()
-			if err == nil {
-				if err := cmd1.Start(); err == nil {
-					outputBytes, err := io.ReadAll(stderr)
-					if err == nil {
-						tempText := string(outputBytes)
-						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-							result += fmt.Sprintf("%-10s", testPath) + "    " + fmt.Sprintf("%-15s", tempText) + "    \n"
-							return result
-						} else {
-							result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockNames[ind]) + "    "
-						}
-						result += parseResultDD(tempText)
-					}
-				}
-			}
-			// 读取测试
-			var tempText string
-			cmd2 := exec.Command("sudo", "dd", "if="+testPath+"/"+blockFiles[ind], "of=/dev/null", "bs="+bs, "count="+blockCounts[ind], "oflag=direct")
-			defer os.Remove(testPath + "/" + blockFiles[ind])
-			stderr2, err := cmd2.StderrPipe()
-			if err == nil {
-				if err := cmd2.Start(); err == nil {
-					outputBytes, err := io.ReadAll(stderr2)
-					if err == nil {
-						tempText = string(outputBytes)
-						if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-							result += fmt.Sprintf("%-15s", tempText) + "    \n"
-							return result
-						}
-					}
-				}
-			} else {
-				result += fmt.Sprintf("%-15s", err.Error()) + "    \n"
-				return result
-			}
-			result += parseResultDD(tempText)
-			result += "\n"
+			result += ddTest1(testPath, testPath, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 		}
 	}
 	return result
 }
-
-//25600+0 records in
-//25600+0 records out
-//104857600 bytes (105 MB, 100 MiB) copied, 15.034 s, 7.0 MB/s
-
-//1000+0 records in
-//1000+0 records out
-//1048576000 bytes (1.0 GB, 1000 MiB) copied, 2.7358 s, 383 MB/s
 
 // FioTest 通过fio测试硬盘
 func FioTest(language string, enableMultiCheck bool, testPath string) string {

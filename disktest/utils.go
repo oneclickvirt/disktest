@@ -2,6 +2,7 @@ package disktest
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -157,4 +158,26 @@ func formatSpeed(raw interface{}, rawType string) string {
 	result := fmt.Sprintf("%.2f", resultFloat)
 	// concat formatted result value with units and return result
 	return strings.Join([]string{result, unit}, " ")
+}
+
+// execDDTest 执行dd命令测试硬盘IO，并回传结果和测试错误
+func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
+	var tempText string
+	cmd2 := exec.Command("sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")
+	stderr2, err := cmd2.StderrPipe()
+	if err == nil {
+		if err := cmd2.Start(); err == nil {
+			outputBytes, err := io.ReadAll(stderr2)
+			if err == nil {
+				tempText = string(outputBytes)
+			} else {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	} else {
+		return "", err
+	}
+	return tempText, nil
 }
