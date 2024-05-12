@@ -75,7 +75,6 @@ func DDTest(language string, enableMultiCheck bool) string {
 					}
 				}
 			}
-			os.Remove(path + "/100MB.test")
 			// 读取测试
 			// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
 			cmd2 := exec.Command("dd", "if="+path+"/100MB.test", "of=/dev/null", "bs=4k", "count=25600", "oflag=direct")
@@ -198,6 +197,15 @@ func FioTest(language string, enableMultiCheck bool) string {
 				}
 			}
 		}
+	}
+	cmd := exec.Command("command", "-v", "fio")
+	output, err := cmd.Output()
+	if err == nil {
+		if !strings.Contains(string(output), "fio") {
+			return ""
+		}
+	} else {
+		return ""
 	}
 	if language == "en" {
 		result += "Test Path     Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
