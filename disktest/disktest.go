@@ -220,10 +220,30 @@ func FioTest(language string, enableMultiCheck bool) string {
 			stderr1, err := cmd1.StderrPipe()
 			if err == nil {
 				if err := cmd1.Start(); err == nil {
-					outputBytes, err := io.ReadAll(stderr1)
+					_, err := io.ReadAll(stderr1)
 					if err == nil {
-						tempText := string(outputBytes)
 						result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
+						// 读取测试
+						blockSizes := []string{"4k", "64k", "512k", "1m"}
+						for _, BS := range blockSizes {
+							// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=2G --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
+							cmd2 := exec.Command("timeout", "35", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
+							stderr2, err := cmd2.StderrPipe()
+							if err == nil {
+								if err := cmd2.Start(); err == nil {
+									outputBytes, err := io.ReadAll(stderr2)
+									if err == nil {
+										tempText := string(outputBytes)
+										tempList := strings.Split(tempText, "\n")
+										for _, l := range tempList {
+											if strings.Contains(l, "rand_rw_"+BS) {
+												fmt.Println(l)
+											}
+										}
+									}
+								}
+							}
+						}
 					} else {
 						return ""
 					}
@@ -233,12 +253,6 @@ func FioTest(language string, enableMultiCheck bool) string {
 			} else {
 				return ""
 			}
-		}
-		blockSizes := []string{"4k", "64k", "512k", "1m"}
-		for _, BS := range blockSizes {
-			fmt.Println(blockSize)
-			// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=2G --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
-			cmd2 := exec.Command("timeout", "35", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
 		}
 	}
 	return result
