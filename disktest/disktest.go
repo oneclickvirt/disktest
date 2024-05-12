@@ -200,9 +200,9 @@ func FioTest(language string, enableMultiCheck bool) string {
 		}
 	}
 	if language == "en" {
-		result += "Test Path    Block Size         4k (IOPS)                        64k(IOPS)\n"
+		result += "Test Path     Block           Read(IOPS)           Write(IOPS)       Total(IOPS)\n"
 	} else {
-		result += "测试路径      块大小             4k (IOPS)                        64k(IOPS)\n"
+		result += "测试路径       块大小          读测试(IOPS)          写测试(IOPS)       总和(IOPS)\n"
 	}
 	// 生成测试文件
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "x86" || runtime.GOARCH == "x86_64" {
@@ -223,7 +223,6 @@ func FioTest(language string, enableMultiCheck bool) string {
 				if err := cmd1.Start(); err == nil {
 					_, err := io.ReadAll(stderr1)
 					if err == nil {
-						result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    " + fmt.Sprintf("%-15s", "100MB-4K Block") + "    "
 						// 测试
 						blockSizes := []string{"4k", "64k", "512k", "1m"}
 						for _, BS := range blockSizes {
@@ -242,19 +241,23 @@ func FioTest(language string, enableMultiCheck bool) string {
 										DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
 										DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
 										DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
-										fmt.Println(formatIOPS(DISK_IOPS, "int"))
 										// Speed
 										DISK_TEST_R := tpList[7]
 										DISK_TEST_W := tpList[48]
 										DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
 										DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
 										DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
-										fmt.Println(formatSpeed(DISK_TEST, "float64"))
+										// 拼接输出文本
+										result += fmt.Sprintf("%-10s", strings.TrimSpace(devices[index])) + "    "
+										result += fmt.Sprintf("%-5s", BS) + "    "
+										result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
+										result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
+										result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
+										result += "\n"
 									}
 								}
 							}
 						}
-						result += "\n"
 					} else {
 						return ""
 					}
