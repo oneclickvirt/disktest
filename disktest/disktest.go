@@ -183,7 +183,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	// fio --version
 	cmd := exec.Command("fio", "--version")
 	output, _ := cmd.Output()
-	if !strings.Contains(string(output), "fio") || strings.Contains(string(output), "failed") {
+	if strings.Contains(string(output), "failed") {
 		return ""
 	}
 	if language == "en" {
