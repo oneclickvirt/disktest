@@ -200,9 +200,9 @@ func FioTest(language string, enableMultiCheck bool) string {
 		}
 	}
 	if language == "en" {
-		result += "Test Path     Block           Read(IOPS)           Write(IOPS)       Total(IOPS)\n"
+		result += "Test Path     Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
 	} else {
-		result += "测试路径       块大小          读测试(IOPS)          写测试(IOPS)       总和(IOPS)\n"
+		result += "测试路径       块大小    读测试(IOPS)             写测试(IOPS)             总和(IOPS)\n"
 	}
 	// 生成测试文件
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "x86" || runtime.GOARCH == "x86_64" {
