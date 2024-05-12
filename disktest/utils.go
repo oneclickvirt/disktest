@@ -65,11 +65,11 @@ func isWritableMountpoint(path string) bool {
 }
 
 // parseResultDD 提取dd测试的结果
-func parseResultDD(tempText string) string {
+func parseResultDD(tempText, blockCount string) string {
 	var result string
 	tp1 := strings.Split(tempText, "\n")
 	var records, usageTime float64
-	records, _ = strconv.ParseFloat(strings.Split(strings.TrimSpace(tp1[0]), "+")[0], 64)
+	records, _ = strconv.ParseFloat(blockCount, 64)
 	for _, t := range tp1 {
 		if strings.Contains(t, "bytes") {
 			// t 为 104857600 bytes (105 MB, 100 MiB) copied, 4.67162 s, 22.4 MB/s
@@ -111,8 +111,8 @@ func formatIOPS(raw interface{}, rawType string) string {
 	} else {
 		return ""
 	}
-	// Check if IOPS speed > 1k
-	if iops >= 1000 {
+	// Check if IOPS speed > 10k
+	if iops >= 10000 {
 		// Divide the raw result by 1k
 		result := float64(iops) / 1000.0
 		// Shorten the formatted result to one decimal place (i.e. x.x)

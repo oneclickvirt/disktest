@@ -49,7 +49,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	defer os.Remove(path + blockFile)
 	if err == nil {
 		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
-		result += parseResultDD(tempText)
+		result += parseResultDD(tempText, blockCount)
 	}
 	// 读取测试
 	// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
@@ -59,7 +59,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 		tempText, _ = execDDTest(path+blockFile, path+"/read"+blockFile, bs, blockCount)
 		defer os.Remove(path + "/read" + blockFile)
 	}
-	result += parseResultDD(tempText)
+	result += parseResultDD(tempText, blockCount)
 	result += "\n"
 	return result
 }
@@ -80,7 +80,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		testFilePath = "/root/"
 		result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 	}
-	result += parseResultDD(tempText)
+	result += parseResultDD(tempText, blockCount)
 	// 读取测试
 	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
@@ -89,7 +89,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		defer os.Remove(testFilePath + blockFile)
 		defer os.Remove("/tmp/read" + blockFile)
 	}
-	result += parseResultDD(tempText)
+	result += parseResultDD(tempText, blockCount)
 	result += "\n"
 	return result
 }
