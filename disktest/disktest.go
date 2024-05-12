@@ -162,6 +162,7 @@ func buildFioFile(path, fioSize string) (string, error) {
 	}
 }
 
+// execFioTest 使用fio测试文件进行测试
 func execFioTest(path, devicename, fioSize string) (string, error) {
 	var result string
 	// 测试
