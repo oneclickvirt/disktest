@@ -42,6 +42,7 @@ func getDiskPerformance(device string) string {
 			}
 		}
 	}
+	result += "\n"
 	return result
 }
 
