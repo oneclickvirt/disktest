@@ -32,6 +32,12 @@
 curl https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_install.sh -sSf | sh
 ```
 
+或
+
+```shell
+curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_install.sh -sSf | sh
+```
+
 更多架构请查看 https://github.com/oneclickvirt/diskTest/releases/tag/output
 
 dd测试：
