@@ -38,7 +38,7 @@ curl https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_insta
 curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_install.sh -sSf | sh
 ```
 
-更多架构请查看 https://github.com/oneclickvirt/diskTest/releases/tag/output
+有环境依赖，Linux/Unix相关系统请确保本地至少安装有```dd```或```fio```工具其中之一，更多架构请查看 https://github.com/oneclickvirt/diskTest/releases/tag/output
 
 dd测试：
 
