@@ -14,7 +14,7 @@ case $os in
       "i386" | "i686")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-linux-386
         ;;
-      "armv7l" | "armv8" | "armv8l" | "aarch64")
+      "armv7l" | "armv8" | "armv8l" | "aarch64" | "arm64")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-linux-arm64
         ;;
       *)
@@ -31,7 +31,7 @@ case $os in
       "i386" | "i686")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-darwin-386
         ;;
-      "armv7l" | "armv8" | "armv8l" | "aarch64")
+      "armv7l" | "armv8" | "armv8l" | "aarch64" | "arm64")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-darwin-arm64
         ;;
       *)
@@ -48,7 +48,7 @@ case $os in
       "i386" | "i686")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-freebsd-386
         ;;
-      "armv7l" | "armv8" | "armv8l" | "aarch64")
+      "armv7l" | "armv8" | "armv8l" | "aarch64" | "arm64")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-freebsd-arm64
         ;;
       *)
@@ -65,7 +65,7 @@ case $os in
       "i386" | "i686")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-openbsd-386
         ;;
-      "armv7l" | "armv8" | "armv8l" | "aarch64")
+      "armv7l" | "armv8" | "armv8l" | "aarch64" | "arm64")
         wget -O diskTest https://github.com/oneclickvirt/diskTest/releases/download/output/diskTest-openbsd-arm64
         ;;
       *)
