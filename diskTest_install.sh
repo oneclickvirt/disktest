@@ -1,5 +1,6 @@
 #!/bin/bash
 #From https://github.com/oneclickvirt/diskTest
+#2024.05.21
 
 rm -rf diskTest
 os=$(uname -s)
