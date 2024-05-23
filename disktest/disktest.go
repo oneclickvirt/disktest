@@ -18,9 +18,9 @@ func WinsatTest(language string, enableMultiCheck bool, testPath string) string 
 	parts, err := disk.Partitions(true)
 	if err == nil {
 		if language == "en" {
-			result += "Test Disk               Random Read             Sequential Read         Sequential Write\n"
+			result += "Test Disk               Random Read[Score]       Sequential Read[Score]  Sequential Write[Score]\n"
 		} else {
-			result += "测试的硬盘                随机写入                  顺序读取                 顺序写入\n"
+			result += "测试的硬盘                随机写入[得分]            顺序读取[得分]            顺序写入[得分]\n"
 		}
 		if testPath == "" {
 			if enableMultiCheck {
@@ -113,9 +113,9 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		}
 	}
 	if language == "en" {
-		result += "Test Path     Block Size         Direct Write                      Direct Read\n"
+		result += "Test Path     Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
 	} else {
-		result += "测试路径      块大小             直接写入                          直接读取\n"
+		result += "测试路径      块大小             直接写入(IOPS)                    直接读取(IOPS)\n"
 	}
 	blockNames := []string{"100MB-4K Block", "1GB-1M Block"}
 	blockCounts := []string{"25600", "1000"}
