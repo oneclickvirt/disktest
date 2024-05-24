@@ -301,3 +301,15 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	return result
 }
+
+// func Sysbench(language string) string {
+// 	var result string
+// 	comCheck := exec.Command("sysbench", "--version")
+// 	output, err := comCheck.CombinedOutput()
+// 	if err == nil {
+	
+// 	} else {
+// 		return ""
+// 	}
+// 	return result
+// }
