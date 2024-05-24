@@ -40,6 +40,28 @@ func WinsatTest(language string, enableMultiCheck bool, testPath string) string 
 	return result
 }
 
+// execDDTest 执行dd命令测试硬盘IO，并回传结果和测试错误
+func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
+	var tempText string
+	cmd2 := exec.Command("sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")
+	stderr2, err := cmd2.StderrPipe()
+	if err == nil {
+		if err := cmd2.Start(); err == nil {
+			outputBytes, err := io.ReadAll(stderr2)
+			if err == nil {
+				tempText = string(outputBytes)
+			} else {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	} else {
+		return "", err
+	}
+	return tempText, nil
+}
+
 // ddTest1 无重试机制
 func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) string {
 	var result string
