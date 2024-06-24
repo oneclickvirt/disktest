@@ -3,6 +3,7 @@
 #2024.06.24
 
 rm -rf /usr/bin/disktest
+rm -rf disktest
 os=$(uname -s)
 arch=$(uname -m)
 
