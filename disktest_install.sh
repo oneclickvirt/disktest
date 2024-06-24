@@ -2,7 +2,7 @@
 #From https://github.com/oneclickvirt/disktest
 #2024.06.24
 
-rm -rf disktest
+rm -rf /usr/bin/disktest
 os=$(uname -s)
 arch=$(uname -m)
 
@@ -82,4 +82,4 @@ case $os in
 esac
 
 chmod 777 disktest
-./disktest
+cp disktest /usr/bin/disktest
