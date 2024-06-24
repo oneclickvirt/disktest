@@ -1,6 +1,6 @@
 module github.com/oneclickvirt/disktest
 
-go 1.21.5
+go 1.22.4
 
 require github.com/shirou/gopsutil v3.21.11+incompatible
 
