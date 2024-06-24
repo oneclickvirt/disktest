@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/oneclickvirt/disktest/disktest"
+	"github.com/oneclickvirt/disktest/disk"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 	testPathPtr := flag.String("p", "", "Specific Test Disk Path (default is /root or C:)")
 	flag.Parse()
 	if showVersion {
-		fmt.Println(disktest.DiskTestVersion)
+		fmt.Println(disk.DiskTestVersion)
 		return
 	}
 	var language, res, testMethod, testPath string
@@ -51,12 +51,12 @@ func main() {
 		testPath = strings.TrimSpace(strings.ToLower(*testPathPtr))
 	}
 	if runtime.GOOS == "windows" {
-		res = disktest.WinsatTest(language, isMultiCheck, testPath)
+		res = disk.WinsatTest(language, isMultiCheck, testPath)
 	} else {
 		if testMethod == "fio" {
-			res = disktest.FioTest(language, isMultiCheck, testPath)
+			res = disk.FioTest(language, isMultiCheck, testPath)
 		} else if testMethod == "dd" {
-			res = disktest.DDTest(language, isMultiCheck, testPath)
+			res = disk.DDTest(language, isMultiCheck, testPath)
 		}
 	}
 	fmt.Printf(res)
