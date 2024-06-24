@@ -59,6 +59,8 @@ func main() {
 			res = disk.DDTest(language, isMultiCheck, testPath)
 		}
 	}
+	fmt.Println("--------------------------------------------------")
 	fmt.Printf(res)
+	fmt.Println("--------------------------------------------------")
 	// TODO https://github.com/devlights/diskio
 }
