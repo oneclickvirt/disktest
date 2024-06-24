@@ -1,6 +1,6 @@
-# diskTest
+# disktest
 
-[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Foneclickvirt%2FdiskTest&count_bg=%2379C83D&title_bg=%23555555&icon=sonarcloud.svg&icon_color=%2345FFC2&title=hits&edge_flat=false)](https://hits.seeyoufarm.com) [![Build and Release](https://github.com/oneclickvirt/diskTest/actions/workflows/main.yaml/badge.svg)](https://github.com/oneclickvirt/diskTest/actions/workflows/main.yaml)
+[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Foneclickvirt%2Fdisktest&count_bg=%2379C83D&title_bg=%23555555&icon=sonarcloud.svg&icon_color=%2345FFC2&title=hits&edge_flat=false)](https://hits.seeyoufarm.com) [![Build and Release](https://github.com/oneclickvirt/disktest/actions/workflows/main.yaml/badge.svg)](https://github.com/oneclickvirt/disktest/actions/workflows/main.yaml)
 
 硬盘IO测试 (Disk IO Test)
 
@@ -27,29 +27,34 @@
 
 ## 使用
 
-更新时间：2024.05.12
+更新时间：2024.06.24
 
 ```shell
-curl https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_install.sh -sSf | sh
+curl https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | sh
 ```
 
 或
 
 ```shell
-curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/diskTest/main/diskTest_install.sh -sSf | sh
+curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | sh
 ```
 
-有环境依赖，Linux/Unix相关系统请确保本地至少安装有```dd```或```fio```工具其中之一，更多架构请查看 https://github.com/oneclickvirt/diskTest/releases/tag/output
+有环境依赖，Linux/Unix相关系统请确保本地至少安装有```dd```或```fio```工具其中之一，更多架构请查看 https://github.com/oneclickvirt/disktest/releases/tag/output
 
 dd测试：
 
-![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/163b1150-dc45-4d53-abbf-c6e1acca4e19)
+![图片](https://github.com/oneclickvirt/disktest/assets/103393591/163b1150-dc45-4d53-abbf-c6e1acca4e19)
 
 fio测试：
 
-![图片](https://github.com/oneclickvirt/diskTest/assets/103393591/3052b430-2d93-4a07-9e12-0a911ffb36c3)
+![图片](https://github.com/oneclickvirt/disktest/assets/103393591/3052b430-2d93-4a07-9e12-0a911ffb36c3)
 
 winsat测试：
 
-![1716466264315](https://github.com/oneclickvirt/diskTest/assets/103393591/505b9525-216c-4e9a-b602-65382177d414)
+![1716466264315](https://github.com/oneclickvirt/disktest/assets/103393591/505b9525-216c-4e9a-b602-65382177d414)
 
+## 在Golang中使用
+
+```
+go get github.com/oneclickvirt/disktest@latest
+```

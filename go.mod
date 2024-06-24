@@ -1,4 +1,4 @@
-module github.com/oneclickvirt/diskTest
+module github.com/oneclickvirt/disktest
 
 go 1.21.5
 

@@ -307,7 +307,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 // 	comCheck := exec.Command("sysbench", "--version")
 // 	output, err := comCheck.CombinedOutput()
 // 	if err == nil {
-	
+
 // 	} else {
 // 		return ""
 // 	}

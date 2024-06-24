@@ -2,7 +2,6 @@ package disktest
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -85,7 +84,7 @@ func parseResultDD(tempText, blockCount string) string {
 				} else {
 					iopsText = strconv.FormatFloat(iops, 'f', 2, 64) + " IOPS, " + strconv.FormatFloat(usageTime, 'f', 2, 64) + "s"
 				}
-				result += fmt.Sprintf("%-30s", strings.TrimSpace(ioSpeed)+" " + ioSpeedFlat + "("+iopsText+")") + "    "
+				result += fmt.Sprintf("%-30s", strings.TrimSpace(ioSpeed)+" "+ioSpeedFlat+"("+iopsText+")") + "    "
 			}
 		}
 	}

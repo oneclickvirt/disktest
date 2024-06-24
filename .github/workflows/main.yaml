@@ -29,12 +29,12 @@ jobs:
     
     - name: Delete Existing Release Assets
       run: |
-        release_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/diskTest/releases/tags/output" | jq -r '.id')
+        release_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/disktest/releases/tags/output" | jq -r '.id')
         echo "Deleting existing release assets..."
-        assets=$(curl -s -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/oneclickvirt/diskTest/releases/$release_id/assets" | jq -r '.[] | .id')
+        assets=$(curl -s -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/oneclickvirt/disktest/releases/$release_id/assets" | jq -r '.[] | .id')
         for asset in $assets; do
           echo "Deleting asset with ID: $asset"
-          curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/diskTest/releases/assets/$asset"
+          curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/disktest/releases/assets/$asset"
         done
         sleep 60
 
@@ -55,18 +55,18 @@ jobs:
       run: |
         mkdir -p bin
         cd cmd
-        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ../bin/diskTest-${{ matrix.goos }}-${{ matrix.goarch }} -v -ldflags="-extldflags=-static" .
+        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ../bin/disktest-${{ matrix.goos }}-${{ matrix.goarch }} -v -ldflags="-extldflags=-static" .
 
     - name: Upload New Assets
       run: |
-        release_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/diskTest/releases/tags/output" | jq -r '.id')
+        release_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/disktest/releases/tags/output" | jq -r '.id')
         echo "Uploading new assets to release..."
         for file in ./bin/*; do
           echo "Uploading $file to release..."
           curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @"$file" \
-            "https://uploads.github.com/repos/oneclickvirt/diskTest/releases/$release_id/assets?name=$(basename "$file")"
+            "https://uploads.github.com/repos/oneclickvirt/disktest/releases/$release_id/assets?name=$(basename "$file")"
           rm -rf $file
         done
 
