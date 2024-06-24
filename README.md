@@ -29,6 +29,8 @@
 
 更新时间：2024.06.24
 
+下载及安装
+
 ```shell
 curl https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | sh
 ```
@@ -37,6 +39,33 @@ curl https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_insta
 
 ```shell
 curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | sh
+```
+
+使用
+
+```
+disktest
+```
+
+或
+
+```
+./disktest
+```
+
+进行测试
+
+```
+Usage of disktest:
+  -d string
+        Enable multi disk check parameter (single or multi, default is single)
+  -l string
+        Language parameter (en or zh)
+  -m string
+        Specific Test Method (dd or fio)
+  -p string
+        Specific Test Disk Path (default is /root or C:)
+  -v    show version
 ```
 
 有环境依赖，Linux/Unix相关系统请确保本地至少安装有```dd```或```fio```工具其中之一，更多架构请查看 https://github.com/oneclickvirt/disktest/releases/tag/output
