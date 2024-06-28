@@ -82,6 +82,13 @@ winsat测试：
 
 ![1716466264315](https://github.com/oneclickvirt/disktest/assets/103393591/505b9525-216c-4e9a-b602-65382177d414)
 
+## 卸载
+
+```
+rm -rf /root/disktest
+rm -rf /usr/bin/disktest
+```
+
 ## 在Golang中使用
 
 ```
