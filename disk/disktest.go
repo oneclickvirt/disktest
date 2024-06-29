@@ -229,6 +229,11 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 
 // FioTest 通过fio测试硬盘
 func FioTest(language string, enableMultiCheck bool, testPath string) string {
+	cmd := exec.Command("fio", "-v")
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		return ""
+	}
 	var (
 		result, fioSize string
 		devices         []string

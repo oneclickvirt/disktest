@@ -1,3 +1,3 @@
 package disk
 
-const DiskTestVersion = "v0.0.2"
+const DiskTestVersion = "v0.0.3"

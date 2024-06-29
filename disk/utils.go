@@ -94,69 +94,78 @@ func parseResultDD(tempText, blockCount string) string {
 // formatIOPS 转换fio的测试中的IOPS的值
 // rawType 支持 string 或 int
 func formatIOPS(raw interface{}, rawType string) string {
-	// Ensure raw value is not empty, if it is, return blank
+	// 确保 raw 值不为空，如果为空则返回空字符串
 	var iops int
 	var err error
-	if rawType == "string" {
-		if raw.(string) == "" {
+
+	switch v := raw.(type) {
+	case string:
+		if v == "" {
 			return ""
 		}
-		// Convert raw string to integer
-		iops, err = strconv.Atoi(raw.(string))
+		// 将 raw 字符串转换为整数
+		iops, err = strconv.Atoi(v)
 		if err != nil {
 			return ""
 		}
-	} else if rawType == "int" {
-		iops = raw.(int)
-	} else {
+	case int:
+		iops = v
+	default:
 		return ""
 	}
-	// Check if IOPS speed > 10k
+	// 检查 IOPS 速度是否大于等于 10k
 	if iops >= 10000 {
-		// Divide the raw result by 1k
+		// 将原始结果除以 1k
 		result := float64(iops) / 1000.0
-		// Shorten the formatted result to one decimal place (i.e. x.x)
+		// 将格式化后的结果保留一位小数（例如 x.x）
 		resultStr := fmt.Sprintf("%.1fk", result)
 		return resultStr
 	}
-	// If IOPS speed <= 1k, return the original value
-	return raw.(string)
+	// 如果 IOPS 速度小于等于 1k，则返回原始值
+	if rawType == "string" {
+		return raw.(string)
+	} else {
+		return fmt.Sprintf("%d", iops)
+	}
 }
 
 // formatSpeed 转换fio的测试中的TEST的值
 // rawType 支持 string 或 float64
 func formatSpeed(raw interface{}, rawType string) string {
-	var rawFloat float64
-	var err error
-	if rawType == "string" {
-		if raw.(string) == "" {
-			return ""
-		}
-		// disk speed in KB/s
-		rawFloat, err = strconv.ParseFloat(raw.(string), 64)
-		if err != nil {
-			return ""
-		}
-	} else if rawType == "float64" {
-		rawFloat = raw.(float64)
-	} else {
-		return ""
-	}
-	var resultFloat float64 = rawFloat
-	var denom float64 = 1
-	unit := "KB/s"
-	// check if disk speed >= 1 GB/s
-	if rawFloat >= 1000000 {
-		denom = 1000000
-		unit = "GB/s"
-	} else if rawFloat >= 1000 { // check if disk speed < 1 GB/s && >= 1 MB/s
-		denom = 1000
-		unit = "MB/s"
-	}
-	// divide the raw result to get the corresponding formatted result (based on determined unit)
-	resultFloat /= denom
-	// shorten the formatted result to two decimal places (i.e. x.xx)
-	result := fmt.Sprintf("%.2f", resultFloat)
-	// concat formatted result value with units and return result
-	return strings.Join([]string{result, unit}, " ")
+    var rawFloat float64
+    var err error
+    // 根据 rawType 确定如何处理 raw 的类型
+    switch v := raw.(type) {
+    case string:
+        if v == "" {
+            return ""
+        }
+        // 将 raw 字符串转换为 float64
+        rawFloat, err = strconv.ParseFloat(v, 64)
+        if err != nil {
+            return ""
+        }
+    case float64:
+        rawFloat = v
+    default:
+        return ""
+    }
+    // 初始化结果相关变量
+    var resultFloat float64 = rawFloat
+    var denom float64 = 1
+    unit := "KB/s"
+    // 根据速度大小确定单位
+    if rawFloat >= 1000000 {
+        denom = 1000000
+        unit = "GB/s"
+    } else if rawFloat >= 1000 {
+        denom = 1000
+        unit = "MB/s"
+    }
+    // 根据单位除以相应的分母以得到格式化后的结果
+    resultFloat /= denom
+    // 将格式化结果保留两位小数
+    result := fmt.Sprintf("%.2f", resultFloat)
+    // 将格式化结果值与单位拼接并返回结果
+    return strings.Join([]string{result, unit}, " ")
 }
