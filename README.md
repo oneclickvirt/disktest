@@ -17,7 +17,7 @@
 
 注意：默认不自动安装```fio```组件，如需使用请自行安装后再使用本项目，如```apt update && apt install fio -y```
 
-不使用```sysbench```进行硬盘IO测试，因为默认设置下```fio```测试效果比sysbench测试更优，且```fio```的维护者比```sysbench```的维护者更活跃。
+不使用```sysbench```进行硬盘IO测试，因为默认设置下```fio```测试效果比```sysbench```测试更优，且```fio```的维护者比```sysbench```的维护者更活跃。
 
 ## TODO
 
