@@ -60,6 +60,8 @@ Usage: disktest [options]
   -h    Show help information
   -l string
         Language parameter (en or zh)
+  -log
+        Enable logging
   -m string
         Specific Test Method (dd or fio)
   -p string
