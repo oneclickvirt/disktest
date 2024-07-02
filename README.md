@@ -54,16 +54,17 @@ disktest
 进行测试
 
 ```
-Usage of disktest:
+Usage: disktest [options]
   -d string
         Enable multi disk check parameter (single or multi, default is single)
+  -h    Show help information
   -l string
         Language parameter (en or zh)
   -m string
         Specific Test Method (dd or fio)
   -p string
         Specific Test Disk Path (default is /root or C:)
-  -v    show version
+  -v    Show version
 ```
 
 有环境依赖，Linux/Unix相关系统请确保本地至少安装有```dd```或```fio```工具其中之一，更多架构请查看 https://github.com/oneclickvirt/disktest/releases/tag/output
