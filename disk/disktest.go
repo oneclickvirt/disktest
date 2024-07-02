@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
@@ -91,6 +92,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	} else {
 		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		result += parseResultDD(tempText, blockCount)
+		time.Sleep(1 * time.Second)
 	}
 	// 读取测试
 	tempText, err = execDDTest(path+blockFile, "/dev/null", bs, blockCount)
@@ -104,6 +106,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 		if err != nil && EnableLoger {
 			Logger.Info("Read test (first attempt) error: " + err.Error())
 		}
+		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest(path+blockFile, path+"/read"+blockFile, bs, blockCount)
 		defer os.Remove(path + "/read" + blockFile)
 		if err != nil && EnableLoger {
@@ -132,6 +135,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 	}
 	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
 		defer os.Remove("/tmp/" + blockFile)
 		if err != nil {
@@ -147,6 +151,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	}
 	result += parseResultDD(tempText, blockCount)
 	// 读取测试
+	time.Sleep(1 * time.Second)
 	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
 	if err != nil {
@@ -155,6 +160,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 	}
 	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
 		defer os.Remove(testFilePath + blockFile)
 		defer os.Remove("/tmp/read" + blockFile)
@@ -344,6 +350,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				_, err := buildFioFile(path, fioSize)
 				defer os.Remove(path + "/test.fio")
 				if err == nil {
+					time.Sleep(1 * time.Second)
 					tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
 					if err == nil {
 						result += tempResult
@@ -363,6 +370,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				buildPath = "/root"
 			}
 			if buildPath != "" {
+				time.Sleep(1 * time.Second)
 				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
 				if err == nil {
 					result += tempResult
@@ -375,7 +383,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
 			return tempText
 		}
-		// 测试
+		time.Sleep(1 * time.Second)
 		tempResult, err := execFioTest(testPath, testPath, fioSize)
 		if err == nil {
 			result += tempResult
