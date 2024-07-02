@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
 )
 
@@ -42,44 +43,72 @@ func WinsatTest(language string, enableMultiCheck bool, testPath string) string 
 
 // execDDTest 执行dd命令测试硬盘IO，并回传结果和测试错误
 func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
 	var tempText string
 	cmd2 := exec.Command("sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")
 	stderr2, err := cmd2.StderrPipe()
-	if err == nil {
-		if err := cmd2.Start(); err == nil {
-			outputBytes, err := io.ReadAll(stderr2)
-			if err == nil {
-				tempText = string(outputBytes)
-			} else {
-				return "", err
-			}
-		} else {
-			return "", err
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("failed to get StderrPipe: " + err.Error())
 		}
-	} else {
 		return "", err
 	}
+	if err := cmd2.Start(); err != nil {
+		if EnableLoger {
+			Logger.Info("failed to start command: " + err.Error())
+		}
+		return "", err
+	}
+	outputBytes, err := io.ReadAll(stderr2)
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("failed to read stderr: " + err.Error())
+		}
+		return "", err
+	}
+
+	tempText = string(outputBytes)
 	return tempText, nil
 }
 
 // ddTest1 无重试机制
 func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) string {
 	var result string
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
 	// 写入测试
-	// dd if=/dev/zero of=/tmp/100MB.test bs=4k count=25600 oflag=direct
 	tempText, err := execDDTest("/dev/zero", path+blockFile, bs, blockCount)
 	defer os.Remove(path + blockFile)
-	if err == nil {
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("Write test error: " + err.Error())
+		}
+	} else {
 		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		result += parseResultDD(tempText, blockCount)
 	}
 	// 读取测试
-	// dd if=/tmp/100MB.test of=/dev/null bs=4k count=25600 oflag=direct
 	tempText, err = execDDTest(path+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove(path + blockFile)
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("Read test error: " + err.Error())
+		}
+	}
 	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-		tempText, _ = execDDTest(path+blockFile, path+"/read"+blockFile, bs, blockCount)
+		if err != nil && EnableLoger {
+			Logger.Info("Read test (first attempt) error: " + err.Error())
+		}
+		tempText, err = execDDTest(path+blockFile, path+"/read"+blockFile, bs, blockCount)
 		defer os.Remove(path + "/read" + blockFile)
+		if err != nil && EnableLoger {
+			Logger.Info("Read test (second attempt) error: " + err.Error())
+		}
 	}
 	result += parseResultDD(tempText, blockCount)
 	result += "\n"
@@ -89,13 +118,27 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 // ddTest2 有重试机制，重试至于 /tmp 目录
 func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	var result string
-	// 写入测试
 	var testFilePath string
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
+	// 写入测试
 	tempText, err := execDDTest("/dev/zero", "/root/"+blockFile, bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("execDDTest error for /root/ path: " + err.Error())
+		}
+	}
 	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-		tempText, _ = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
+		tempText, err = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
 		defer os.Remove("/tmp/" + blockFile)
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("execDDTest error for /tmp/ path: " + err.Error())
+			}
+		}
 		testFilePath = "/tmp/"
 		result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 	} else {
@@ -106,10 +149,20 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	// 读取测试
 	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("execDDTest read error for /root/ path: " + err.Error())
+		}
+	}
 	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-		tempText, _ = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
+		tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
 		defer os.Remove(testFilePath + blockFile)
 		defer os.Remove("/tmp/read" + blockFile)
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
+			}
+		}
 	}
 	result += parseResultDD(tempText, blockCount)
 	result += "\n"
@@ -161,31 +214,45 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 
 // buildFioFile 生成对应文件
 func buildFioFile(path, fioSize string) (string, error) {
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
 	// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435
 	// fio --name=setup --ioengine=libaio --rw=read --bs=64k --iodepth=64 --numjobs=2 --size=512MB --runtime=1 --gtod_reduce=1 --filename="/tmp/test.fio" --direct=1 --minimal
 	var tempText string
 	cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
 		"--filename=\""+path+"/test.fio\"", "--direct=1", "--minimal")
 	stderr1, err := cmd1.StderrPipe()
-	if err == nil {
-		if err := cmd1.Start(); err == nil {
-			outputBytes, err := io.ReadAll(stderr1)
-			if err == nil {
-				tempText = string(outputBytes)
-				return tempText, nil
-			} else {
-				return "", err
-			}
-		} else {
-			return "", err
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("failed to get stderr pipe: " + err.Error())
 		}
-	} else {
 		return "", err
 	}
+	if err := cmd1.Start(); err != nil {
+		if EnableLoger {
+			Logger.Info("failed to start fio command: " + err.Error())
+		}
+		return "", err
+	}
+	outputBytes, err := io.ReadAll(stderr1)
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("failed to read stderr: " + err.Error())
+		}
+		return "", err
+	}
+	tempText = string(outputBytes)
+	return tempText, nil
 }
 
 // execFioTest 使用fio测试文件进行测试
 func execFioTest(path, devicename, fioSize string) (string, error) {
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
 	var result string
 	// 测试
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
@@ -193,7 +260,12 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
 		cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=\""+path+"/test.fio\"", "--group_reporting", "--minimal")
 		output, err := cmd2.Output()
-		if err == nil {
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("failed to execute fio command: " + err.Error())
+			}
+			return "", err
+		} else {
 			tempText := string(output)
 			tempList := strings.Split(tempText, "\n")
 			for _, l := range tempList {
@@ -220,8 +292,6 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 					result += "\n"
 				}
 			}
-		} else {
-			return "", err
 		}
 	}
 	return result, nil
@@ -229,9 +299,16 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 
 // FioTest 通过fio测试硬盘
 func FioTest(language string, enableMultiCheck bool, testPath string) string {
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
 	cmd := exec.Command("fio", "-v")
 	_, err := cmd.CombinedOutput()
 	if err != nil {
+		if EnableLoger {
+			Logger.Info("failed to match fio version: " + err.Error())
+		}
 		return ""
 	}
 	var (
@@ -306,15 +383,3 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	return result
 }
-
-// func Sysbench(language string) string {
-// 	var result string
-// 	comCheck := exec.Command("sysbench", "--version")
-// 	output, err := comCheck.CombinedOutput()
-// 	if err == nil {
-
-// 	} else {
-// 		return ""
-// 	}
-// 	return result
-// }

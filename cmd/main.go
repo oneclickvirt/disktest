@@ -25,6 +25,7 @@ func main() {
 	disktestFlag.StringVar(&testMethod, "m", "", "Specific Test Method (dd or fio)")
 	disktestFlag.StringVar(&multiDisk, "d", "", "Enable multi disk check parameter (single or multi, default is single)")
 	disktestFlag.StringVar(&testPath, "p", "", "Specific Test Disk Path (default is /root or C:)")
+	disktestFlag.BoolVar(&disk.EnableLoger, "log", false, "Enable logging")
 	disktestFlag.Parse(os.Args[1:])
 	if help {
 		fmt.Printf("Usage: %s [options]\n", os.Args[0])
