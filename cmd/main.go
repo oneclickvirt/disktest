@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 
@@ -15,40 +16,46 @@ func main() {
 		http.Get("https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Foneclickvirt%2Fdisktest&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false")
 	}()
 	fmt.Println("项目地址:", "https://github.com/oneclickvirt/disktest")
-	// go run main.go -l en -d multi
-	// go run main.go -l en -d single -m fio
-	var showVersion bool
-	flag.BoolVar(&showVersion, "v", false, "show version")
-	languagePtr := flag.String("l", "", "Language parameter (en or zh)")
-	testMethodPtr := flag.String("m", "", "Specific Test Method (dd or fio)")
-	multiDiskPtr := flag.String("d", "", "Enable multi disk check parameter (single or multi, default is single)")
-	testPathPtr := flag.String("p", "", "Specific Test Disk Path (default is /root or C:)")
-	flag.Parse()
+	var showVersion, help bool
+	var language, testMethod, testPath, multiDisk string
+	disktestFlag := flag.NewFlagSet("disktest", flag.ContinueOnError)
+	disktestFlag.BoolVar(&help, "h", false, "Show help information")
+	disktestFlag.BoolVar(&showVersion, "v", false, "Show version")
+	disktestFlag.StringVar(&language, "l", "", "Language parameter (en or zh)")
+	disktestFlag.StringVar(&testMethod, "m", "", "Specific Test Method (dd or fio)")
+	disktestFlag.StringVar(&multiDisk, "d", "", "Enable multi disk check parameter (single or multi, default is single)")
+	disktestFlag.StringVar(&testPath, "p", "", "Specific Test Disk Path (default is /root or C:)")
+	disktestFlag.Parse(os.Args[1:])
+	if help {
+		fmt.Printf("Usage: %s [options]\n", os.Args[0])
+		disktestFlag.PrintDefaults()
+		return
+	}
 	if showVersion {
 		fmt.Println(disk.DiskTestVersion)
 		return
 	}
-	var language, res, testMethod, testPath string
+	var res string
 	var isMultiCheck bool
-	if *languagePtr == "" {
+	if language == "" {
 		language = "zh"
 	} else {
-		language = strings.ToLower(*languagePtr)
+		language = strings.ToLower(language)
 	}
-	if *multiDiskPtr == "" || *multiDiskPtr == "single" {
+	if multiDisk == "" || multiDisk == "single" {
 		isMultiCheck = false
-	} else if *multiDiskPtr == "multi" {
+	} else if multiDisk == "multi" {
 		isMultiCheck = true
 	}
-	if *testMethodPtr == "" || *testMethodPtr == "dd" {
+	if testMethod == "" || testMethod == "dd" {
 		testMethod = "dd"
-	} else if *testMethodPtr == "fio" {
+	} else if testMethod == "fio" {
 		testMethod = "fio"
 	}
-	if *testPathPtr == "" {
+	if testPath == "" {
 		testPath = ""
-	} else if *testPathPtr != "" {
-		testPath = strings.TrimSpace(strings.ToLower(*testPathPtr))
+	} else if testPath != "" {
+		testPath = strings.TrimSpace(strings.ToLower(testPath))
 	}
 	if runtime.GOOS == "windows" {
 		if testMethod != "winsat" && testMethod != "" {

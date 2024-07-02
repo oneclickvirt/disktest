@@ -27,18 +27,16 @@
 
 ## 使用
 
-更新时间：2024.06.24
-
-下载及安装
+下载、安装、更新
 
 ```shell
-curl https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | sh
+curl https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | bash
 ```
 
 或
 
 ```shell
-curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | sh
+curl https://cdn.spiritlhl.net/https://raw.githubusercontent.com/oneclickvirt/disktest/main/disktest_install.sh -sSf | bash
 ```
 
 使用
