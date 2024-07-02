@@ -94,6 +94,14 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 		result += parseResultDD(tempText, blockCount)
 		time.Sleep(1 * time.Second)
 	}
+	// 清理缓存, 避免影响测试结果
+	syncCmd := exec.Command("sync")
+	err = syncCmd.Run()
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("sync command failed: " + err.Error())
+		}
+	}
 	// 读取测试
 	tempText, err = execDDTest(path+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove(path + blockFile)
@@ -150,6 +158,14 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 	}
 	result += parseResultDD(tempText, blockCount)
+	// 清理缓存, 避免影响测试结果
+	syncCmd := exec.Command("sync")
+	err = syncCmd.Run()
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("sync command failed: " + err.Error())
+		}
+	}
 	// 读取测试
 	time.Sleep(1 * time.Second)
 	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
