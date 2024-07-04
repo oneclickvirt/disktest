@@ -241,10 +241,10 @@ func buildFioFile(path, fioSize string) (string, error) {
 		defer Logger.Sync()
 	}
 	// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435
-	// fio --name=setup --ioengine=libaio --rw=read --bs=64k --iodepth=64 --numjobs=2 --size=512MB --runtime=1 --gtod_reduce=1 --filename="/tmp/test.fio" --direct=1 --minimal
+	// fio --name=setup --ioengine=libaio --rw=read --bs=64k --iodepth=64 --numjobs=2 --size=512MB --runtime=1 --gtod_reduce=1 --filename=/tmp/test.fio --direct=1 --minimal
 	var tempText string
 	cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
-		"--filename=\""+path+"/test.fio\"", "--direct=1", "--minimal")
+		"--filename="+path+"/test.fio", "--direct=1", "--minimal")
 	stderr1, err := cmd1.StderrPipe()
 	if err != nil {
 		if EnableLoger {
