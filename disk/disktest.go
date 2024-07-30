@@ -169,9 +169,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 	}
 	// 读取测试
-	if EnableLoger {
-		Logger.Info("Path:" + testFilePath)
-	}
 	time.Sleep(1 * time.Second)
 	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
@@ -179,7 +176,8 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		if EnableLoger {
 			Logger.Info("execDDTest read error for /root/ path: " + err.Error())
 		}
-		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
+			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 			time.Sleep(1 * time.Second)
 			tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
 			defer os.Remove(testFilePath + blockFile)
@@ -190,9 +188,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				}
 			}
 		}
-	}
-	if EnableLoger {
-		Logger.Info("Read Text:" + tempText)
 	}
 	result += parseResultDD(tempText, blockCount)
 	result += "\n"
