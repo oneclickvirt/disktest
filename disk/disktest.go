@@ -110,7 +110,8 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 			Logger.Info("Read test error: " + err.Error())
 		}
 	}
-	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
+		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 		if err != nil && EnableLoger {
 			Logger.Info("Read test (first attempt) error: " + err.Error())
 		}
@@ -142,7 +143,8 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			Logger.Info("execDDTest error for /root/ path: " + err.Error())
 		}
 	}
-	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
+		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
 		defer os.Remove("/tmp/" + blockFile)
@@ -177,6 +179,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			Logger.Info("execDDTest read error for /root/ path: " + err.Error())
 		}
 	}
+	// /dev/null 无法访问，需要替换
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 		time.Sleep(1 * time.Second)
@@ -188,9 +191,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
 			}
 		}
-	}
-	if EnableLoger {
-		Logger.Info("tempText: " + tempText)
 	}
 	result += parseResultDD(tempText, blockCount)
 	result += "\n"
