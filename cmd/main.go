@@ -85,4 +85,8 @@ func main() {
 	fmt.Printf(res)
 	fmt.Println("--------------------------------------------------")
 	// TODO https://github.com/devlights/diskio
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
+	}
 }
