@@ -176,16 +176,16 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		if EnableLoger {
 			Logger.Info("execDDTest read error for /root/ path: " + err.Error())
 		}
-		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
-			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
-			time.Sleep(1 * time.Second)
-			tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
-			defer os.Remove(testFilePath + blockFile)
-			defer os.Remove("/tmp/read" + blockFile)
-			if err != nil {
-				if EnableLoger {
-					Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
-				}
+	}
+	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
+		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
+		time.Sleep(1 * time.Second)
+		tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
+		defer os.Remove(testFilePath + blockFile)
+		defer os.Remove("/tmp/read" + blockFile)
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
 			}
 		}
 	}
