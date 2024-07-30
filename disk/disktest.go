@@ -159,16 +159,19 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	}
 	result += parseResultDD(tempText, blockCount)
 	// 清理缓存, 避免影响测试结果
-	if testFilePath != "/tmp/" {
-		syncCmd := exec.Command("sync")
-		err = syncCmd.Run()
-		if err != nil {
-			if EnableLoger {
-				Logger.Info("sync command failed: " + err.Error())
-			}
-		}
-	}
+	// if testFilePath == "/tmp/" {
+	// 	syncCmd := exec.Command("sync")
+	// 	err = syncCmd.Run()
+	// 	if err != nil {
+	// 		if EnableLoger {
+	// 			Logger.Info("sync command failed: " + err.Error())
+	// 		}
+	// 	}
+	// }
 	// 读取测试
+	if EnableLoger {
+		Logger.Info("Path:" + testFilePath)
+	}
 	time.Sleep(1 * time.Second)
 	tempText, err = execDDTest("/root/"+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
@@ -176,15 +179,15 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		if EnableLoger {
 			Logger.Info("execDDTest read error for /root/ path: " + err.Error())
 		}
-	}
-	if err != nil || strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
-		time.Sleep(1 * time.Second)
-		tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
-		defer os.Remove(testFilePath + blockFile)
-		defer os.Remove("/tmp/read" + blockFile)
-		if err != nil {
-			if EnableLoger {
-				Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
+		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") {
+			time.Sleep(1 * time.Second)
+			tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
+			defer os.Remove(testFilePath + blockFile)
+			defer os.Remove("/tmp/read" + blockFile)
+			if err != nil {
+				if EnableLoger {
+					Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
+				}
 			}
 		}
 	}
