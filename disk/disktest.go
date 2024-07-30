@@ -189,6 +189,9 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			}
 		}
 	}
+	if EnableLoger {
+		Logger.Info("tempText: " + tempText)
+	}
 	result += parseResultDD(tempText, blockCount)
 	result += "\n"
 	return result
