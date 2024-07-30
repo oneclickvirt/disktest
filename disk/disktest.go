@@ -159,15 +159,15 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	}
 	result += parseResultDD(tempText, blockCount)
 	// 清理缓存, 避免影响测试结果
-	// if testFilePath == "/tmp/" {
-	// 	syncCmd := exec.Command("sync")
-	// 	err = syncCmd.Run()
-	// 	if err != nil {
-	// 		if EnableLoger {
-	// 			Logger.Info("sync command failed: " + err.Error())
-	// 		}
-	// 	}
-	// }
+	if testFilePath == "/tmp/" {
+		syncCmd := exec.Command("sync")
+		err = syncCmd.Run()
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("sync command failed: " + err.Error())
+			}
+		}
+	}
 	// 读取测试
 	if EnableLoger {
 		Logger.Info("Path:" + testFilePath)
@@ -190,6 +190,9 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				}
 			}
 		}
+	}
+	if EnableLoger {
+		Logger.Info("Read Text:" + tempText)
 	}
 	result += parseResultDD(tempText, blockCount)
 	result += "\n"
