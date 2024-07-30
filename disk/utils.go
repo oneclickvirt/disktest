@@ -100,9 +100,15 @@ func parseResultDD(tempText, blockCount string) string {
 	var records, usageTime float64
 	records, _ = strconv.ParseFloat(blockCount, 64)
 	for _, t := range tp1 {
-		if strings.Contains(t, "bytes") {
+		if strings.Contains(t, "bytes") || strings.Contains(t, "字节") {
+			var tp2 []string
+			if strings.Contains(t, "bytes") {
+				tp2 = strings.Split(t, ",")
+			} else {
+				tp2 = strings.Split(t, "，")
+			}
 			// t 为 104857600 bytes (105 MB, 100 MiB) copied, 4.67162 s, 22.4 MB/s
-			tp2 := strings.Split(t, ",")
+			// t 为 104857600字节（105 MB，100 MiB）已复制，0.0569789 s，1.8 GB/s
 			if len(tp2) == 4 {
 				usageTime, _ = strconv.ParseFloat(strings.Split(strings.TrimSpace(tp2[2]), " ")[0], 64)
 				ioSpeed := strings.Split(strings.TrimSpace(tp2[3]), " ")[0]
