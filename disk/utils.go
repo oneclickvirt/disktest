@@ -122,6 +122,19 @@ func parseResultDD(tempText, blockCount string) string {
 				}
 				result += fmt.Sprintf("%-30s", strings.TrimSpace(ioSpeed)+" "+ioSpeedFlat+"("+iopsText+")") + "    "
 			}
+			if len(tp2) == 3 {
+				usageTime, _ = strconv.ParseFloat(strings.Split(strings.TrimSpace(tp2[1]), " ")[0], 64)
+				ioSpeed := strings.Split(strings.TrimSpace(tp2[2]), " ")[0]
+				ioSpeedFlat := strings.Split(strings.TrimSpace(tp2[2]), " ")[1]
+				iops := records / usageTime
+				var iopsText string
+				if iops >= 1000 {
+					iopsText = strconv.FormatFloat(iops/1000, 'f', 2, 64) + "K IOPS, " + strconv.FormatFloat(usageTime, 'f', 2, 64) + "s"
+				} else {
+					iopsText = strconv.FormatFloat(iops, 'f', 2, 64) + " IOPS, " + strconv.FormatFloat(usageTime, 'f', 2, 64) + "s"
+				}
+				result += fmt.Sprintf("%-30s", strings.TrimSpace(ioSpeed)+" "+ioSpeedFlat+"("+iopsText+")") + "    "
+			}
 		}
 	}
 	return result
