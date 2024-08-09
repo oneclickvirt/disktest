@@ -300,14 +300,14 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 				if strings.Contains(l, "rand_rw_"+BS) {
 					tpList := strings.Split(l, ";")
 					// IOPS
-					DISK_IOPS_R := tpList[8]
-					DISK_IOPS_W := tpList[49]
+					DISK_IOPS_R := tpList[7]
+					DISK_IOPS_W := tpList[48]
 					DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
 					DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
 					DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
 					// Speed
-					DISK_TEST_R := tpList[7]
-					DISK_TEST_W := tpList[48]
+					DISK_TEST_R := tpList[6]
+					DISK_TEST_W := tpList[47]
 					DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
 					DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
 					DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
