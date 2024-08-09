@@ -361,10 +361,10 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		result += "测试路径      块大小   读测试(IOPS)            写测试(IOPS)            总和(IOPS)\n"
 	}
 	// 生成测试文件
-	if runtime.GOARCH == "amd64" || runtime.GOARCH == "x86" || runtime.GOARCH == "x86_64" {
-		fioSize = "2G"
+	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
+	    fioSize = "512M"
 	} else {
-		fioSize = "512MB"
+	    fioSize = "2G"
 	}
 	if testPath == "" {
 		if enableMultiCheck {
