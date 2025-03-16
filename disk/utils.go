@@ -100,7 +100,40 @@ func parseResultDD(tempText, blockCount string) string {
 	var records, usageTime float64
 	records, _ = strconv.ParseFloat(blockCount, 64)
 	for _, t := range tp1 {
-		if strings.Contains(t, "bytes") || strings.Contains(t, "字节") {
+		// 检查FreeBSD格式: "1048576000 bytes transferred in 0.197523 secs (5308633827 bytes/sec)"
+		if strings.Contains(t, "bytes transferred in") && strings.Contains(t, "bytes/sec") {
+			parts := strings.Split(t, "transferred in")
+			if len(parts) == 2 {
+				timeAndSpeed := strings.Split(parts[1], "(")
+				if len(timeAndSpeed) == 2 {
+					// 提取时间
+					timeStr := strings.Split(strings.TrimSpace(timeAndSpeed[0]), " ")[0]
+					usageTime, _ = strconv.ParseFloat(timeStr, 64)
+					// 提取速度
+					speedStr := strings.Split(timeAndSpeed[1], " ")[0]
+					speedFloat, _ := strconv.ParseFloat(speedStr, 64)
+					// 转换为MB/s
+					speedMBs := speedFloat / 1024 / 1024
+					var speedUnit string
+					if speedMBs >= 1024 {
+						speedMBs = speedMBs / 1024
+						speedUnit = "GB/s"
+					} else {
+						speedUnit = "MB/s"
+					}
+					// 计算IOPS
+					iops := records / usageTime
+					var iopsText string
+					if iops >= 1000 {
+						iopsText = strconv.FormatFloat(iops/1000, 'f', 2, 64) + "K IOPS, " + strconv.FormatFloat(usageTime, 'f', 2, 64) + "s"
+					} else {
+						iopsText = strconv.FormatFloat(iops, 'f', 2, 64) + " IOPS, " + strconv.FormatFloat(usageTime, 'f', 2, 64) + "s"
+					}
+					result += fmt.Sprintf("%-30s", fmt.Sprintf("%.2f %s(%s)", speedMBs, speedUnit, iopsText)) + "    "
+				}
+			}
+		} else if strings.Contains(t, "bytes") || strings.Contains(t, "字节") {
+			// Linux格式处理
 			var tp2 []string
 			if strings.Contains(t, "bytes") {
 				tp2 = strings.Split(t, ",")
