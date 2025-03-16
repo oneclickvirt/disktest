@@ -205,6 +205,11 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		mountPoints []string
 	)
 	parts, err := disk.Partitions(false)
+	if EnableLoger {
+		for _, part := range parts {
+			Logger.Info("path: " + part.Mountpoint)
+		}
+	}
 	if err == nil {
 		for _, f := range parts {
 			if !strings.Contains(f.Device, "vda") && !strings.Contains(f.Device, "snap") && !strings.Contains(f.Device, "loop") {
@@ -246,10 +251,11 @@ func buildFioFile(path, fioSize string) (string, error) {
 		InitLogger()
 		defer Logger.Sync()
 	}
+	// 获取可用的IO引擎
+	ioEngine := checkFioIOEngine()
 	// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435
-	// fio --name=setup --ioengine=libaio --rw=read --bs=64k --iodepth=64 --numjobs=2 --size=512MB --runtime=1 --gtod_reduce=1 --filename=/tmp/test.fio --direct=1 --minimal
 	var tempText string
-	cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine=libaio", "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
+	cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine="+ioEngine, "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
 		"--filename="+path+"/test.fio", "--direct=1", "--minimal")
 	stderr1, err := cmd1.StderrPipe()
 	if err != nil {
@@ -276,17 +282,20 @@ func buildFioFile(path, fioSize string) (string, error) {
 }
 
 // execFioTest 使用fio测试文件进行测试
+// execFioTest 使用fio测试文件进行测试
 func execFioTest(path, devicename, fioSize string) (string, error) {
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
 	}
 	var result string
+	// 获取可用的IO引擎
+	ioEngine := checkFioIOEngine()
 	// 测试
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
 	for _, BS := range blockSizes {
 		// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
-		cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine=libaio", "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename="+path+"/test.fio", "--group_reporting", "--minimal")
+		cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine="+ioEngine, "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename="+path+"/test.fio", "--group_reporting", "--minimal")
 		output, err := cmd2.Output()
 		if err != nil {
 			if EnableLoger {
@@ -345,6 +354,11 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		mountPoints     []string
 	)
 	parts, err := disk.Partitions(false)
+	if EnableLoger {
+		for _, part := range parts {
+			Logger.Info("path: " + part.Mountpoint)
+		}
+	}
 	if err == nil {
 		for _, f := range parts {
 			if !strings.Contains(f.Device, "vda") && !strings.Contains(f.Device, "snap") && !strings.Contains(f.Device, "loop") {
@@ -362,9 +376,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	// 生成测试文件
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
-	    fioSize = "512M"
+		fioSize = "512M"
 	} else {
-	    fioSize = "2G"
+		fioSize = "2G"
 	}
 	if testPath == "" {
 		if enableMultiCheck {

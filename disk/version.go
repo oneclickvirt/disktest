@@ -1,5 +1,5 @@
 package disk
 
-const DiskTestVersion = "v0.0.4"
+const DiskTestVersion = "v0.0.5"
 
 var EnableLoger = false

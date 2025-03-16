@@ -217,3 +217,59 @@ func formatSpeed(raw interface{}, rawType string) string {
 	// 将格式化结果值与单位拼接并返回结果
 	return strings.Join([]string{result, unit}, " ")
 }
+
+// checkFioIOEngine 检查哪个IO引擎可用
+func checkFioIOEngine() string {
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
+	// 检查是否可以使用sudo
+	sudoAvailable := true
+	sudoCheck := exec.Command("sudo", "-n", "true")
+	if err := sudoCheck.Run(); err != nil {
+		if EnableLoger {
+			Logger.Info("sudo命令不可用或需要密码: " + err.Error())
+		}
+		sudoAvailable = false
+	}
+	// 使用或不使用sudo执行fio测试
+	var cmd *exec.Cmd
+	// 首先尝试libaio
+	if sudoAvailable {
+		cmd = exec.Command("sudo", "fio", "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+	} else {
+		cmd = exec.Command("fio", "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+	}
+	_, err := cmd.CombinedOutput()
+	defer func() {
+		_ = os.Remove("/tmp/fio_engine_check")
+	}()
+	if err == nil {
+		if EnableLoger {
+			Logger.Info("libaio IO引擎可用")
+		}
+		return "libaio"
+	}
+	// 如果libaio失败，尝试posixaio
+	if sudoAvailable {
+		cmd = exec.Command("sudo", "fio", "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+	} else {
+		cmd = exec.Command("fio", "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+	}
+	_, err = cmd.CombinedOutput()
+	defer func() {
+		_ = os.Remove("/tmp/fio_engine_check")
+	}()
+	if err == nil {
+		if EnableLoger {
+			Logger.Info("posixaio IO引擎可用")
+		}
+		return "posixaio"
+	}
+	// 如果都失败了，返回默认的psync引擎
+	if EnableLoger {
+		Logger.Info("libaio和posixaio都不可用，使用psync")
+	}
+	return "psync"
+}
