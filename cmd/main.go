@@ -48,10 +48,10 @@ func main() {
 	} else if multiDisk == "multi" {
 		isMultiCheck = true
 	}
-	if testMethod == "" || testMethod == "dd" {
-		testMethod = "dd"
-	} else if testMethod == "fio" {
+	if testMethod == "" || testMethod == "fio" {
 		testMethod = "fio"
+	} else if testMethod == "dd" {
+		testMethod = "dd"
 	}
 	if testPath == "" {
 		testPath = ""
