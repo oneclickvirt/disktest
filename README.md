@@ -1,6 +1,8 @@
 # disktest
 
-[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Foneclickvirt%2Fdisktest&count_bg=%2379C83D&title_bg=%23555555&icon=sonarcloud.svg&icon_color=%2345FFC2&title=hits&edge_flat=false)](https://hits.seeyoufarm.com) [![Build and Release](https://github.com/oneclickvirt/disktest/actions/workflows/main.yaml/badge.svg)](https://github.com/oneclickvirt/disktest/actions/workflows/main.yaml)
+[![Hits](https://hits.spiritlhl.net/disktest.svg?action=hit&title=Hits&title_bg=%23555555&count_bg=%230eecf8&edge_flat=false)](https://hits.spiritlhl.net)
+
+[![Build and Release](https://github.com/oneclickvirt/disktest/actions/workflows/main.yaml/badge.svg)](https://github.com/oneclickvirt/disktest/actions/workflows/main.yaml)
 
 硬盘IO测试 (Disk IO Test)
 
