@@ -198,7 +198,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			Logger.Info("execDDTest read error for " + testFilePath + " path: " + err.Error())
 		}
 	}
-	// /dev/null 无法访问，需要替换
+	// /dev/null 无法访问
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 		if EnableLoger {
@@ -206,11 +206,26 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
-		defer os.Remove(testFilePath + blockFile)
 		defer os.Remove("/tmp/read" + blockFile)
 		if err != nil {
 			if EnableLoger {
 				Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
+			}
+		}
+		// 如果/tmp/read也失败，尝试直接读取到当前目录
+		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
+			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
+			if EnableLoger {
+				Logger.Info("读取测试到/tmp/read文件失败，尝试读取到当前目录: " + tempText)
+			}
+			time.Sleep(1 * time.Second)
+			// 使用原始文件名，但添加"read_"前缀，避免与源文件冲突
+			tempText, err = execDDTest(testFilePath+blockFile, testFilePath+"read_"+blockFile, bs, blockCount)
+			defer os.Remove(testFilePath + "read_" + blockFile)
+			if err != nil {
+				if EnableLoger {
+					Logger.Info("execDDTest read error for current path: " + err.Error())
+				}
 			}
 		}
 	}
