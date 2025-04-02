@@ -1,10 +1,12 @@
 package disk
 
 import (
+	"embed"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -13,6 +15,45 @@ import (
 	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
 )
+
+//go:embed bin/*
+var binFiles embed.FS
+
+// getFioBinary 获取与当前系统匹配的 fio 二进制文件
+func getFioBinary() (string, error) {
+	osType := runtime.GOOS
+	archType := runtime.GOARCH
+	binaryName := fmt.Sprintf("fio-%s-%s", osType, archType)
+	if osType == "windows" {
+		binaryName += ".exe"
+	}
+	// 创建临时目录存放二进制文件
+	tempDir, err := os.MkdirTemp("", "disktest")
+	if err != nil {
+		return "", fmt.Errorf("创建临时目录失败: %v", err)
+	}
+	// 读取嵌入的二进制文件
+	binPath := filepath.Join("bin", binaryName)
+	fileContent, err := binFiles.ReadFile(binPath)
+	if err != nil {
+		return "", fmt.Errorf("读取嵌入的 fio 二进制文件失败: %v", err)
+	}
+	// 写入临时文件
+	tempFile := filepath.Join(tempDir, binaryName)
+	if err := os.WriteFile(tempFile, fileContent, 0755); err != nil {
+		return "", fmt.Errorf("写入临时 fio 文件失败: %v", err)
+	}
+	if EnableLoger {
+		Logger.Info("使用嵌入的 fio 二进制文件: " + tempFile)
+	}
+	return tempFile, nil
+}
+
+// commandExists 检查命令是否存在
+func commandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
+}
 
 // WinsatTest 通过windows自带系统工具测试IO
 func WinsatTest(language string, enableMultiCheck bool, testPath string) string {
@@ -48,29 +89,46 @@ func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
 		InitLogger()
 		defer Logger.Sync()
 	}
+	// 检查系统是否安装了dd命令
+	ddExists := commandExists("dd")
 	var tempText string
-	cmd2 := exec.Command("sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")
-	stderr2, err := cmd2.StderrPipe()
-	if err != nil {
-		if EnableLoger {
-			Logger.Info("failed to get StderrPipe: " + err.Error())
+	if ddExists {
+		// 使用系统dd命令
+		cmd2 := exec.Command("sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")
+		stderr2, err := cmd2.StderrPipe()
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("failed to get StderrPipe: " + err.Error())
+			}
+			return "", err
 		}
-		return "", err
-	}
-	if err := cmd2.Start(); err != nil {
-		if EnableLoger {
-			Logger.Info("failed to start command: " + err.Error())
+		if err := cmd2.Start(); err != nil {
+			if EnableLoger {
+				Logger.Info("failed to start command: " + err.Error())
+			}
+			return "", err
 		}
-		return "", err
-	}
-	outputBytes, err := io.ReadAll(stderr2)
-	if err != nil {
-		if EnableLoger {
-			Logger.Info("failed to read stderr: " + err.Error())
+		outputBytes, err := io.ReadAll(stderr2)
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("failed to read stderr: " + err.Error())
+			}
+			return "", err
 		}
-		return "", err
+		tempText = string(outputBytes)
+	} else {
+		// 系统未安装dd，使用嵌入的二进制文件
+		if EnableLoger {
+			Logger.Info("系统未安装dd命令，尝试使用嵌入的dd二进制文件")
+		}
+
+		// 目前没有嵌入的dd二进制文件，返回错误
+		if EnableLoger {
+			Logger.Info("未找到嵌入的dd二进制文件，无法执行测试")
+		}
+		return "系统未安装dd命令，且未找到嵌入的dd二进制文件", fmt.Errorf("dd命令不可用")
 	}
-	tempText = string(outputBytes)
+
 	if EnableLoger {
 		Logger.Info("DD测试原始输出: " + tempText)
 	}
@@ -267,6 +325,20 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			}
 		}
 	}
+
+	// 检查系统是否安装了dd命令
+	ddExists := commandExists("dd")
+	if !ddExists {
+		if EnableLoger {
+			Logger.Info("系统未安装dd命令，无法执行DD测试")
+		}
+		if language == "en" {
+			return "DD test cannot be performed: dd command not found in system.\n"
+		} else {
+			return "无法执行DD测试：系统中未找到dd命令。\n"
+		}
+	}
+
 	if language == "en" {
 		result += "Test Path     Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
 	} else {
@@ -314,15 +386,34 @@ func buildFioFile(path, fioSize string) (string, error) {
 		defer Logger.Sync()
 		Logger.Info("开始生成FIO测试文件，路径: " + path + ", 大小: " + fioSize)
 	}
-	// 获取可用的IO引擎
-	ioEngine := checkFioIOEngine()
-	if EnableLoger {
-		Logger.Info("使用IO引擎: " + ioEngine)
+
+	var fioCmd string
+	var args []string
+
+	// 检查系统是否安装了fio命令
+	if commandExists("fio") {
+		fioCmd = "fio"
+		args = []string{"--name=setup", "--ioengine=" + checkFioIOEngine(), "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size=" + fioSize, "--runtime=1", "--gtod_reduce=1", "--filename=" + path + "/test.fio", "--direct=1", "--minimal"}
+		if commandExists("sudo") {
+			fioCmd = "sudo"
+			args = append([]string{"fio"}, args...)
+		}
+	} else {
+		// 系统未安装fio，使用嵌入的二进制文件
+		embeddedFio, err := getFioBinary()
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("获取嵌入的fio二进制文件失败: " + err.Error())
+			}
+			return "", err
+		}
+
+		fioCmd = embeddedFio
+		args = []string{"--name=setup", "--ioengine=" + checkFioIOEngine(), "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size=" + fioSize, "--runtime=1", "--gtod_reduce=1", "--filename=" + path + "/test.fio", "--direct=1", "--minimal"}
 	}
-	// https://github.com/masonr/yet-another-bench-script/blob/0ad4c4e85694dbcf0958d8045c2399dbd0f9298c/yabs.sh#L435
-	var tempText string
-	cmd1 := exec.Command("sudo", "fio", "--name=setup", "--ioengine="+ioEngine, "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1",
-		"--filename="+path+"/test.fio", "--direct=1", "--minimal")
+
+	// 执行fio命令
+	cmd1 := exec.Command(fioCmd, args...)
 	stderr1, err := cmd1.StderrPipe()
 	if err != nil {
 		if EnableLoger {
@@ -343,7 +434,7 @@ func buildFioFile(path, fioSize string) (string, error) {
 		}
 		return "", err
 	}
-	tempText = string(outputBytes)
+	tempText := string(outputBytes)
 	if EnableLoger && tempText != "" {
 		Logger.Info("生成FIO测试文件输出: " + tempText)
 	}
@@ -358,64 +449,131 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		Logger.Info("开始执行FIO测试，路径: " + path + ", 设备: " + devicename + ", 大小: " + fioSize)
 	}
 	var result string
+
+	var fioCmd string
+	var baseArgs []string
+
+	// 检查系统是否安装了fio命令
+	if commandExists("fio") {
+		fioCmd = "fio"
+		if commandExists("sudo") {
+			fioCmd = "sudo"
+			baseArgs = []string{"fio"}
+		}
+	} else {
+		// 系统未安装fio，使用嵌入的二进制文件
+		embeddedFio, err := getFioBinary()
+		if err != nil {
+			if EnableLoger {
+				Logger.Info("获取嵌入的fio二进制文件失败: " + err.Error())
+			}
+			return "", err
+		}
+		fioCmd = embeddedFio
+	}
+
 	// 获取可用的IO引擎
 	ioEngine := checkFioIOEngine()
 	if EnableLoger {
 		Logger.Info("使用IO引擎: " + ioEngine)
 	}
+
 	// 测试
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
 	for _, BS := range blockSizes {
 		if EnableLoger {
 			Logger.Info("开始测试块大小: " + BS)
 		}
-		// timeout 35 fio --name=rand_rw_4k --ioengine=libaio --rw=randrw --rwmixread=50 --bs=4k --iodepth=64 --numjobs=2 --size=512MB --runtime=30 --gtod_reduce=1 --direct=1 --filename="/tmp/test.fio" --group_reporting --minimal
-		cmd2 := exec.Command("timeout", "35", "sudo", "fio", "--name=rand_rw_"+BS, "--ioengine="+ioEngine, "--rw=randrw", "--rwmixread=50", "--bs="+BS, "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename="+path+"/test.fio", "--group_reporting", "--minimal")
-		output, err := cmd2.Output()
-		if err != nil {
-			if EnableLoger {
-				Logger.Info("failed to execute fio command: " + err.Error())
-			}
-			return "", err
-		} else {
-			tempText := string(output)
-			if EnableLoger {
-				Logger.Info("FIO测试原始输出(" + BS + "): " + tempText)
-			}
-			tempList := strings.Split(tempText, "\n")
-			for _, l := range tempList {
-				if strings.Contains(l, "rand_rw_"+BS) {
-					tpList := strings.Split(l, ";")
-					// IOPS
-					DISK_IOPS_R := tpList[7]
-					DISK_IOPS_W := tpList[48]
-					DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
-					DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
-					DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
-					// Speed
-					DISK_TEST_R := tpList[6]
-					DISK_TEST_W := tpList[47]
-					DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
-					DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
-					DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
-					// 记录解析后的结果到日志
-					if EnableLoger {
-						Logger.Info("块大小: " + BS + ", 读取IOPS: " + DISK_IOPS_R + ", 写入IOPS: " + DISK_IOPS_W +
-							", 总IOPS: " + strconv.Itoa(DISK_IOPS) + ", 读取速度: " + DISK_TEST_R +
-							", 写入速度: " + DISK_TEST_W + ", 总速度: " + fmt.Sprintf("%f", DISK_TEST))
-					}
-					// 拼接输出文本
-					result += fmt.Sprintf("%-10s", devicename) + "    "
-					result += fmt.Sprintf("%-5s", BS) + "    "
-					result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
-					result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
-					result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
-					result += "\n"
+
+		// 构建命令参数
+		var args []string
+		if commandExists("timeout") {
+			args = append(args, "35")
+		}
+
+		fioArgs := []string{"--name=rand_rw_" + BS, "--ioengine=" + ioEngine, "--rw=randrw", "--rwmixread=50", "--bs=" + BS, "--iodepth=64", "--numjobs=2", "--size=" + fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=" + path + "/test.fio", "--group_reporting", "--minimal"}
+
+		if commandExists("timeout") {
+			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
+			output, err := cmd2.Output()
+			if err != nil {
+				if EnableLoger {
+					Logger.Info("failed to execute fio command: " + err.Error())
 				}
+				return "", err
+			} else {
+				tempText := string(output)
+				result += processFioOutput(tempText, BS, devicename)
+			}
+		} else {
+			cmd2 := exec.Command(fioCmd, append(baseArgs, fioArgs...)...)
+			output, err := cmd2.Output()
+			if err != nil {
+				if EnableLoger {
+					Logger.Info("failed to execute fio command: " + err.Error())
+				}
+				return "", err
+			} else {
+				tempText := string(output)
+				result += processFioOutput(tempText, BS, devicename)
 			}
 		}
 	}
 	return result, nil
+}
+
+// processFioOutput 处理fio输出结果
+func processFioOutput(tempText, BS, devicename string) string {
+	var result string
+	if EnableLoger {
+		Logger.Info("FIO测试原始输出(" + BS + "): " + tempText)
+	}
+	tempList := strings.Split(tempText, "\n")
+	for _, l := range tempList {
+		if strings.Contains(l, "rand_rw_"+BS) {
+			tpList := strings.Split(l, ";")
+			// IOPS
+			DISK_IOPS_R := tpList[7]
+			DISK_IOPS_W := tpList[48]
+			DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
+			DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
+			DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
+			// Speed
+			DISK_TEST_R := tpList[6]
+			DISK_TEST_W := tpList[47]
+			DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
+			DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
+			DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
+			// 记录解析后的结果到日志
+			if EnableLoger {
+				Logger.Info("块大小: " + BS + ", 读取IOPS: " + DISK_IOPS_R + ", 写入IOPS: " + DISK_IOPS_W +
+					", 总IOPS: " + strconv.Itoa(DISK_IOPS) + ", 读取速度: " + DISK_TEST_R +
+					", 写入速度: " + DISK_TEST_W + ", 总速度: " + fmt.Sprintf("%f", DISK_TEST))
+			}
+			// 拼接输出文本
+			result += fmt.Sprintf("%-10s", devicename) + "    "
+			result += fmt.Sprintf("%-5s", BS) + "    "
+			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
+			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
+			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
+			result += "\n"
+		}
+	}
+	return result
+}
+
+// cleanupEmbeddedFiles 清理临时文件
+func cleanupEmbeddedFiles() {
+	// 清理临时目录中的二进制文件
+	tempDir := os.TempDir()
+	entries, err := os.ReadDir(tempDir)
+	if err == nil {
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), "disktest") {
+				os.RemoveAll(filepath.Join(tempDir, entry.Name()))
+			}
+		}
+	}
 }
 
 // FioTest 通过fio测试硬盘
@@ -425,18 +583,46 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		defer Logger.Sync()
 		Logger.Info("开始FIO测试硬盘")
 	}
-	cmd := exec.Command("fio", "-v")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if EnableLoger {
-			Logger.Info("failed to match fio version: " + err.Error())
-			Logger.Info("fio version output: " + string(output))
+
+	// 检查系统是否安装了fio命令或使用嵌入的二进制文件
+	fioAvailable := false
+	var fioVersionOutput string
+
+	if commandExists("fio") {
+		fioAvailable = true
+		cmd := exec.Command("fio", "-v")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			fioVersionOutput = string(output)
 		}
-		return ""
+	} else {
+		// 尝试使用嵌入的二进制文件
+		embeddedFio, err := getFioBinary()
+		if err == nil {
+			fioAvailable = true
+			cmd := exec.Command(embeddedFio, "-v")
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				fioVersionOutput = string(output)
+			}
+
+			// 注册退出函数以清理临时文件
+			defer cleanupEmbeddedFiles()
+		}
 	}
-	if EnableLoger {
-		Logger.Info("fio版本信息: " + string(output))
+
+	if !fioAvailable {
+		if language == "en" {
+			return "FIO test cannot be performed: fio command not found in system and embedded binary not available.\n"
+		} else {
+			return "无法执行FIO测试：系统中未找到fio命令且嵌入的二进制文件不可用。\n"
+		}
 	}
+
+	if EnableLoger && fioVersionOutput != "" {
+		Logger.Info("fio版本信息: " + fioVersionOutput)
+	}
+
 	var (
 		result, fioSize string
 		devices         []string
