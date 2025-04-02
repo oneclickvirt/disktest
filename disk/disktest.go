@@ -291,7 +291,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			}
 		}
 	}
-
 	// 检查系统是否安装了dd命令
 	ddExists := commandExists("dd")
 	if !ddExists {
@@ -304,7 +303,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			return "无法执行DD测试：系统中未找到dd命令。\n"
 		}
 	}
-
 	if language == "en" {
 		result += "Test Path     Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
 	} else {
@@ -352,10 +350,8 @@ func buildFioFile(path, fioSize string) (string, error) {
 		defer Logger.Sync()
 		Logger.Info("开始生成FIO测试文件，路径: " + path + ", 大小: " + fioSize)
 	}
-
 	var fioCmd string
 	var args []string
-
 	// 检查系统是否安装了fio命令
 	if commandExists("fio") {
 		fioCmd = "fio"
@@ -373,11 +369,9 @@ func buildFioFile(path, fioSize string) (string, error) {
 			}
 			return "", err
 		}
-
 		fioCmd = embeddedFio
 		args = []string{"--name=setup", "--ioengine=" + checkFioIOEngine(), "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size=" + fioSize, "--runtime=1", "--gtod_reduce=1", "--filename=" + path + "/test.fio", "--direct=1", "--minimal"}
 	}
-
 	// 执行fio命令
 	cmd1 := exec.Command(fioCmd, args...)
 	stderr1, err := cmd1.StderrPipe()
@@ -415,16 +409,12 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		Logger.Info("开始执行FIO测试，路径: " + path + ", 设备: " + devicename + ", 大小: " + fioSize)
 	}
 	var result string
-
-	var fioCmd string
 	var baseArgs []string
-
 	// 检查系统是否安装了fio命令
 	if commandExists("fio") {
-		fioCmd = "fio"
+		baseArgs = []string{"fio"}
 		if commandExists("sudo") {
-			fioCmd = "sudo"
-			baseArgs = []string{"fio"}
+			baseArgs = []string{"sudo", "fio"}
 		}
 	} else {
 		// 系统未安装fio，使用嵌入的二进制文件
@@ -435,30 +425,25 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 			}
 			return "", err
 		}
-		fioCmd = embeddedFio
+		baseArgs = []string{embeddedFio}
 	}
-
 	// 获取可用的IO引擎
 	ioEngine := checkFioIOEngine()
 	if EnableLoger {
 		Logger.Info("使用IO引擎: " + ioEngine)
 	}
-
 	// 测试
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
 	for _, BS := range blockSizes {
 		if EnableLoger {
 			Logger.Info("开始测试块大小: " + BS)
 		}
-
 		// 构建命令参数
 		var args []string
 		if commandExists("timeout") {
 			args = append(args, "35")
 		}
-
 		fioArgs := []string{"--name=rand_rw_" + BS, "--ioengine=" + ioEngine, "--rw=randrw", "--rwmixread=50", "--bs=" + BS, "--iodepth=64", "--numjobs=2", "--size=" + fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=" + path + "/test.fio", "--group_reporting", "--minimal"}
-
 		if commandExists("timeout") {
 			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
 			output, err := cmd2.Output()
