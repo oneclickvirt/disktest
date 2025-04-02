@@ -457,7 +457,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 				result += processFioOutput(tempText, BS, devicename)
 			}
 		} else {
-			cmd2 := exec.Command(fioCmd, append(baseArgs, fioArgs...)...)
+			cmd2 := exec.Command(baseArgs[0], append(baseArgs[1:], fioArgs...)...)
 			output, err := cmd2.Output()
 			if err != nil {
 				if EnableLoger {
