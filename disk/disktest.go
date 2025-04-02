@@ -13,12 +13,20 @@ import (
 
 	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
+	"go.uber.org/zap"
 )
 
 // commandExists 检查命令是否存在
 func commandExists(cmd string) bool {
 	_, err := exec.LookPath(cmd)
 	return err == nil
+}
+
+// loggerInsert 插入日志
+func loggerInsert(Logger *zap.Logger, st string) {
+	if EnableLoger {
+		Logger.Info(st)
+	}
 }
 
 // WinsatTest 通过windows自带系统工具测试IO
@@ -63,41 +71,27 @@ func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
 		cmd2 := exec.Command("sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")
 		stderr2, err := cmd2.StderrPipe()
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("failed to get StderrPipe: " + err.Error())
-			}
+			loggerInsert(Logger, "failed to get StderrPipe: "+err.Error())
 			return "", err
 		}
 		if err := cmd2.Start(); err != nil {
-			if EnableLoger {
-				Logger.Info("failed to start command: " + err.Error())
-			}
+			loggerInsert(Logger, "failed to start command: "+err.Error())
 			return "", err
 		}
 		outputBytes, err := io.ReadAll(stderr2)
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("failed to read stderr: " + err.Error())
-			}
+			loggerInsert(Logger, "failed to read stderr: "+err.Error())
 			return "", err
 		}
 		tempText = string(outputBytes)
 	} else {
 		// 系统未安装dd，使用嵌入的二进制文件
-		if EnableLoger {
-			Logger.Info("系统未安装dd命令，尝试使用嵌入的dd二进制文件")
-		}
-
+		loggerInsert(Logger, "系统未安装dd命令，尝试使用嵌入的dd二进制文件")
 		// 目前没有嵌入的dd二进制文件，返回错误
-		if EnableLoger {
-			Logger.Info("未找到嵌入的dd二进制文件，无法执行测试")
-		}
+		loggerInsert(Logger, "未找到嵌入的dd二进制文件，无法执行测试")
 		return "系统未安装dd命令，且未找到嵌入的dd二进制文件", fmt.Errorf("dd命令不可用")
 	}
-
-	if EnableLoger {
-		Logger.Info("DD测试原始输出: " + tempText)
-	}
+	loggerInsert(Logger, "DD测试原始输出: "+tempText)
 	return tempText, nil
 }
 
@@ -112,15 +106,11 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	tempText, err := execDDTest("/dev/zero", path+blockFile, bs, blockCount)
 	defer os.Remove(path + blockFile)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("Write test error: " + err.Error())
-		}
+		loggerInsert(Logger, "Write test error: "+err.Error())
 	} else {
 		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		parsedResult := parseResultDD(tempText, blockCount)
-		if EnableLoger {
-			Logger.Info("写入测试结果解析: " + parsedResult)
-		}
+		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
 		result += parsedResult
 		time.Sleep(1 * time.Second)
 	}
@@ -128,35 +118,29 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	syncCmd := exec.Command("sync")
 	err = syncCmd.Run()
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("sync command failed: " + err.Error())
-		}
+		loggerInsert(Logger, "sync command failed: "+err.Error())
 	}
 	// 读取测试
 	tempText, err = execDDTest(path+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove(path + blockFile)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("Read test error: " + err.Error())
-		}
+		loggerInsert(Logger, "Read test error: "+err.Error())
 	}
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
-		if err != nil && EnableLoger {
-			Logger.Info("Read test (first attempt) error: " + err.Error())
-			Logger.Info("Read test (first attempt) output: " + tempText)
+		if err != nil {
+			loggerInsert(Logger, "Read test (first attempt) error: "+err.Error())
+			loggerInsert(Logger, "Read test (first attempt) output: "+tempText)
 		}
 		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest(path+blockFile, path+"/read"+blockFile, bs, blockCount)
 		defer os.Remove(path + "/read" + blockFile)
-		if err != nil && EnableLoger {
-			Logger.Info("Read test (second attempt) error: " + err.Error())
+		if err != nil {
+			loggerInsert(Logger, "Read test (second attempt) error: "+err.Error())
 		}
 	}
 	parsedResult := parseResultDD(tempText, blockCount)
-	if EnableLoger {
-		Logger.Info("读取测试结果解析: " + parsedResult)
-	}
+	loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
 	result += parsedResult
 	result += "\n"
 	return result
@@ -174,22 +158,16 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	tempText, err := execDDTest("/dev/zero", "/root/"+blockFile, bs, blockCount)
 	defer os.Remove("/root/" + blockFile)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("execDDTest error for /root/ path: " + err.Error())
-		}
+		loggerInsert(Logger, "execDDTest error for /root/ path: "+err.Error())
 	}
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
-		if EnableLoger {
-			Logger.Info("写入测试到/root/失败，尝试写入到/tmp/: " + tempText)
-		}
+		loggerInsert(Logger, "写入测试到/root/失败，尝试写入到/tmp/: "+tempText)
 		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
 		defer os.Remove("/tmp/" + blockFile)
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("execDDTest error for /tmp/ path: " + err.Error())
-			}
+			loggerInsert(Logger, "execDDTest error for /tmp/ path: "+err.Error())
 		}
 		testFilePath = "/tmp/"
 		result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
@@ -198,19 +176,15 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 	}
 	parsedResult := parseResultDD(tempText, blockCount)
-	if EnableLoger {
-		Logger.Info("写入测试路径: " + testFilePath)
-		Logger.Info("写入测试结果解析: " + parsedResult)
-	}
+	loggerInsert(Logger, "写入测试路径: "+testFilePath)
+	loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
 	result += parsedResult
 	// 清理缓存, 避免影响测试结果
 	if testFilePath == "/tmp/" {
 		syncCmd := exec.Command("sync")
 		err = syncCmd.Run()
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("sync command failed: " + err.Error())
-			}
+			loggerInsert(Logger, "sync command failed: "+err.Error())
 		}
 	}
 	// 读取测试
@@ -218,45 +192,33 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	tempText, err = execDDTest(testFilePath+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove(testFilePath + blockFile)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("execDDTest read error for " + testFilePath + " path: " + err.Error())
-		}
+		loggerInsert(Logger, "execDDTest read error for "+testFilePath+" path: "+err.Error())
 	}
 	// /dev/null 无法访问
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
-		if EnableLoger {
-			Logger.Info("读取测试到/dev/null失败，尝试读取到/tmp/read文件: " + tempText)
-		}
+		loggerInsert(Logger, "读取测试到/dev/null失败，尝试读取到/tmp/read文件: "+tempText)
 		time.Sleep(1 * time.Second)
 		tempText, err = execDDTest(testFilePath+blockFile, "/tmp/read"+blockFile, bs, blockCount)
 		defer os.Remove("/tmp/read" + blockFile)
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("execDDTest read error for /tmp/ path: " + err.Error())
-			}
+			loggerInsert(Logger, "execDDTest read error for /tmp/ path: "+err.Error())
 		}
 		// 如果/tmp/read也失败，尝试直接读取到当前目录
 		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
-			if EnableLoger {
-				Logger.Info("读取测试到/tmp/read文件失败，尝试读取到当前目录: " + tempText)
-			}
+			loggerInsert(Logger, "读取测试到/tmp/read文件失败，尝试读取到当前目录: "+tempText)
 			time.Sleep(1 * time.Second)
 			// 使用原始文件名，但添加"read_"前缀，避免与源文件冲突
 			tempText, err = execDDTest(testFilePath+blockFile, testFilePath+"read_"+blockFile, bs, blockCount)
 			defer os.Remove(testFilePath + "read_" + blockFile)
 			if err != nil {
-				if EnableLoger {
-					Logger.Info("execDDTest read error for current path: " + err.Error())
-				}
+				loggerInsert(Logger, "execDDTest read error for current path: "+err.Error())
 			}
 		}
 	}
 	parsedResult = parseResultDD(tempText, blockCount)
-	if EnableLoger {
-		Logger.Info("读取测试结果解析: " + parsedResult)
-	}
+	loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
 	result += parsedResult
 	result += "\n"
 	return result
@@ -284,9 +246,7 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 				if isWritableMountpoint(f.Mountpoint) {
 					devices = append(devices, f.Device)
 					mountPoints = append(mountPoints, f.Mountpoint)
-					if EnableLoger {
-						Logger.Info("添加可写分区: " + f.Mountpoint + ", 设备: " + f.Device)
-					}
+					loggerInsert(Logger, "添加可写分区: "+f.Mountpoint+", 设备: "+f.Device)
 				}
 			}
 		}
@@ -294,9 +254,7 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	// 检查系统是否安装了dd命令
 	ddExists := commandExists("dd")
 	if !ddExists {
-		if EnableLoger {
-			Logger.Info("系统未安装dd命令，无法执行DD测试")
-		}
+		loggerInsert(Logger, "系统未安装dd命令，无法执行DD测试")
 		if language == "en" {
 			return "DD test cannot be performed: dd command not found in system.\n"
 		} else {
@@ -313,30 +271,20 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	blockSizes := []string{"4k", "1M"}
 	blockFiles := []string{"100MB.test", "1GB.test"}
 	for ind, bs := range blockSizes {
-		if EnableLoger {
-			Logger.Info("开始测试块大小: " + bs + ", 文件: " + blockFiles[ind])
-		}
+		loggerInsert(Logger, "开始测试块大小: "+bs+", 文件: "+blockFiles[ind])
 		if testPath == "" {
 			if enableMultiCheck {
-				if EnableLoger {
-					Logger.Info("开始多路径测试")
-				}
+				loggerInsert(Logger, "开始多路径测试")
 				for index, path := range mountPoints {
-					if EnableLoger {
-						Logger.Info("测试路径: " + path + ", 设备: " + devices[index])
-					}
+					loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
 					result += ddTest1(path, devices[index], blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 				}
 			} else {
-				if EnableLoger {
-					Logger.Info("开始单路径测试(/root或/tmp)")
-				}
+				loggerInsert(Logger, "开始单路径测试(/root或/tmp)")
 				result += ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 			}
 		} else {
-			if EnableLoger {
-				Logger.Info("测试指定路径: " + testPath)
-			}
+			loggerInsert(Logger, "测试指定路径: "+testPath)
 			result += ddTest1(testPath, testPath, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 		}
 	}
@@ -364,9 +312,7 @@ func buildFioFile(path, fioSize string) (string, error) {
 		// 系统未安装fio，使用嵌入的二进制文件
 		embeddedFio, err := getFioBinary()
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("获取嵌入的fio二进制文件失败: " + err.Error())
-			}
+			loggerInsert(Logger, "获取嵌入的fio二进制文件失败: "+err.Error())
 			return "", err
 		}
 		fioCmd = embeddedFio
@@ -376,27 +322,21 @@ func buildFioFile(path, fioSize string) (string, error) {
 	cmd1 := exec.Command(fioCmd, args...)
 	stderr1, err := cmd1.StderrPipe()
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("failed to get stderr pipe: " + err.Error())
-		}
+		loggerInsert(Logger, "failed to get stderr pipe: "+err.Error())
 		return "", err
 	}
 	if err := cmd1.Start(); err != nil {
-		if EnableLoger {
-			Logger.Info("failed to start fio command: " + err.Error())
-		}
+		loggerInsert(Logger, "failed to start fio command: "+err.Error())
 		return "", err
 	}
 	outputBytes, err := io.ReadAll(stderr1)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("failed to read stderr: " + err.Error())
-		}
+		loggerInsert(Logger, "failed to read stderr: "+err.Error())
 		return "", err
 	}
 	tempText := string(outputBytes)
-	if EnableLoger && tempText != "" {
-		Logger.Info("生成FIO测试文件输出: " + tempText)
+	if tempText != "" {
+		loggerInsert(Logger, "生成FIO测试文件输出: "+tempText)
 	}
 	return tempText, nil
 }
@@ -420,24 +360,18 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		// 系统未安装fio，使用嵌入的二进制文件
 		embeddedFio, err := getFioBinary()
 		if err != nil {
-			if EnableLoger {
-				Logger.Info("获取嵌入的fio二进制文件失败: " + err.Error())
-			}
+			loggerInsert(Logger, "获取嵌入的fio二进制文件失败: "+err.Error())
 			return "", err
 		}
 		baseArgs = []string{embeddedFio}
 	}
 	// 获取可用的IO引擎
 	ioEngine := checkFioIOEngine()
-	if EnableLoger {
-		Logger.Info("使用IO引擎: " + ioEngine)
-	}
+	loggerInsert(Logger, "使用IO引擎: "+ioEngine)
 	// 测试
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
 	for _, BS := range blockSizes {
-		if EnableLoger {
-			Logger.Info("开始测试块大小: " + BS)
-		}
+		loggerInsert(Logger, "开始测试块大小: "+BS)
 		// 构建命令参数
 		var args []string
 		if commandExists("timeout") {
@@ -448,9 +382,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
 			output, err := cmd2.Output()
 			if err != nil {
-				if EnableLoger {
-					Logger.Info("failed to execute fio command: " + err.Error())
-				}
+				loggerInsert(Logger, "failed to execute fio command: "+err.Error())
 				return "", err
 			} else {
 				tempText := string(output)
@@ -460,9 +392,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 			cmd2 := exec.Command(baseArgs[0], append(baseArgs[1:], fioArgs...)...)
 			output, err := cmd2.Output()
 			if err != nil {
-				if EnableLoger {
-					Logger.Info("failed to execute fio command: " + err.Error())
-				}
+				loggerInsert(Logger, "failed to execute fio command: "+err.Error())
 				return "", err
 			} else {
 				tempText := string(output)
@@ -476,9 +406,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 // processFioOutput 处理fio输出结果
 func processFioOutput(tempText, BS, devicename string) string {
 	var result string
-	if EnableLoger {
-		Logger.Info("FIO测试原始输出(" + BS + "): " + tempText)
-	}
+	loggerInsert(Logger, "FIO测试原始输出("+BS+"): "+tempText)
 	tempList := strings.Split(tempText, "\n")
 	for _, l := range tempList {
 		if strings.Contains(l, "rand_rw_"+BS) {
@@ -496,11 +424,9 @@ func processFioOutput(tempText, BS, devicename string) string {
 			DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
 			DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
 			// 记录解析后的结果到日志
-			if EnableLoger {
-				Logger.Info("块大小: " + BS + ", 读取IOPS: " + DISK_IOPS_R + ", 写入IOPS: " + DISK_IOPS_W +
-					", 总IOPS: " + strconv.Itoa(DISK_IOPS) + ", 读取速度: " + DISK_TEST_R +
-					", 写入速度: " + DISK_TEST_W + ", 总速度: " + fmt.Sprintf("%f", DISK_TEST))
-			}
+			loggerInsert(Logger, "块大小: "+BS+", 读取IOPS: "+DISK_IOPS_R+", 写入IOPS: "+DISK_IOPS_W+
+				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
+				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
 			// 拼接输出文本
 			result += fmt.Sprintf("%-10s", devicename) + "    "
 			result += fmt.Sprintf("%-5s", BS) + "    "
@@ -534,11 +460,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		defer Logger.Sync()
 		Logger.Info("开始FIO测试硬盘")
 	}
-
 	// 检查系统是否安装了fio命令或使用嵌入的二进制文件
 	fioAvailable := false
 	var fioVersionOutput string
-
 	if commandExists("fio") {
 		fioAvailable = true
 		cmd := exec.Command("fio", "-v")
@@ -561,7 +485,6 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			defer cleanupEmbeddedFiles()
 		}
 	}
-
 	if !fioAvailable {
 		if language == "en" {
 			return "FIO test cannot be performed: fio command not found in system and embedded binary not available.\n"
@@ -569,11 +492,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			return "无法执行FIO测试：系统中未找到fio命令且嵌入的二进制文件不可用。\n"
 		}
 	}
-
-	if EnableLoger && fioVersionOutput != "" {
-		Logger.Info("fio版本信息: " + fioVersionOutput)
+	if fioVersionOutput != "" {
+		loggerInsert(Logger, "fio版本信息: "+fioVersionOutput)
 	}
-
 	var (
 		result, fioSize string
 		devices         []string
@@ -592,9 +513,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				if isWritableMountpoint(f.Mountpoint) {
 					devices = append(devices, f.Device)
 					mountPoints = append(mountPoints, f.Mountpoint)
-					if EnableLoger {
-						Logger.Info("添加可写分区: " + f.Mountpoint + ", 设备: " + f.Device)
-					}
+					loggerInsert(Logger, "添加可写分区: "+f.Mountpoint+", 设备: "+f.Device)
 				}
 			}
 		}
@@ -610,39 +529,31 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	} else {
 		fioSize = "2G"
 	}
-	if EnableLoger {
-		Logger.Info("FIO测试文件大小: " + fioSize)
-	}
+	loggerInsert(Logger, "FIO测试文件大小: "+fioSize)
 	if testPath == "" {
 		if enableMultiCheck {
-			if EnableLoger {
-				Logger.Info("开始多路径FIO测试")
-			}
+			loggerInsert(Logger, "开始多路径FIO测试")
 			for index, path := range mountPoints {
-				if EnableLoger {
-					Logger.Info("测试路径: " + path + ", 设备: " + devices[index])
-				}
+				loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
 				buildOutput, err := buildFioFile(path, fioSize)
 				defer os.Remove(path + "/test.fio")
 				if err == nil {
-					if EnableLoger && buildOutput != "" {
-						Logger.Info("生成FIO测试文件输出: " + buildOutput)
+					if buildOutput != "" {
+						loggerInsert(Logger, "生成FIO测试文件输出: "+buildOutput)
 					}
 					time.Sleep(1 * time.Second)
 					tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
 					if err == nil {
 						result += tempResult
-					} else if EnableLoger {
-						Logger.Info("执行FIO测试失败: " + err.Error())
+					} else {
+						loggerInsert(Logger, "执行FIO测试失败: "+err.Error())
 					}
-				} else if EnableLoger {
-					Logger.Info("生成FIO测试文件失败: " + err.Error())
+				} else {
+					loggerInsert(Logger, "生成FIO测试文件失败: "+err.Error())
 				}
 			}
 		} else {
-			if EnableLoger {
-				Logger.Info("开始单路径FIO测试(/root或/tmp)")
-			}
+			loggerInsert(Logger, "开始单路径FIO测试(/root或/tmp)")
 			var buildPath string
 			tempText, err := buildFioFile("/root", fioSize)
 			defer os.Remove("/root/test.fio")
@@ -673,9 +584,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				}
 			}
 			if buildPath != "" {
-				if EnableLoger {
-					Logger.Info("使用路径进行FIO测试: " + buildPath)
-				}
+				loggerInsert(Logger, "使用路径进行FIO测试: "+buildPath)
 				time.Sleep(1 * time.Second)
 				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
 				if err == nil {
@@ -686,9 +595,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			}
 		}
 	} else {
-		if EnableLoger {
-			Logger.Info("测试指定路径: " + testPath)
-		}
+		loggerInsert(Logger, "测试指定路径: "+testPath)
 		tempText, err := buildFioFile(testPath, fioSize)
 		defer os.Remove(testPath + "/test.fio")
 		if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
