@@ -7,74 +7,147 @@ jobs:
   build:
     strategy:
       matrix:
-        goos: [windows, freebsd, linux, darwin]
-        goarch: [amd64, 386]
-        exclude:
-          - goarch: 386
-            goos: darwin
         include:
-          - goos: windows
-            goarch: 386
-          - goos: windows
+          # Linux builds
+          - os: ubuntu-22.04
+            goos: linux
             goarch: amd64
-          - goos: windows
+          - os: ubuntu-22.04
+            goos: linux
+            goarch: 386
+          - os: ubuntu-22.04
+            goos: linux
             goarch: arm64
-          - goos: windows
+          - os: ubuntu-22.04
+            goos: linux
             goarch: arm
             goarm: 7
-          - goos: darwin
+            
+          # Windows builds
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+          - os: windows-latest
+            goos: windows
+            goarch: 386
+            
+          # macOS builds
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
             goarch: arm64
-          - goos: linux
-            goarch: arm
-            goarm: 7
-          - goos: linux
-            goarch: arm64
-          - goos: linux
-            goarch: riscv64
-          - goos: linux
-            goarch: mips64
-          - goos: linux
-            goarch: mips64le
-          - goos: linux
-            goarch: mipsle
-          - goos: linux
-            goarch: mips
-          - goos: linux
-            goarch: ppc64
-          - goos: linux
-            goarch: ppc64le
-          - goos: freebsd
-            goarch: arm64
-          - goos: freebsd
-            goarch: arm
-            goarm: 7
-    runs-on: ubuntu-22.04
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Dockcross
+      # 安装依赖 - Linux
+      - name: Install Linux dependencies
+        if: matrix.goos == 'linux'
         run: |
-          docker run --rm dockcross/linux-${{ matrix.goarch }} > dockcross-${{ matrix.goarch }}
-          chmod +x dockcross-${{ matrix.goarch }}
+          sudo apt-get update
+          sudo apt-get install -y build-essential libaio-dev zlib1g-dev
 
+      # 安装依赖 - macOS
+      - name: Install macOS dependencies
+        if: matrix.goos == 'darwin'
+        run: |
+          brew install libaio
+
+      # 安装依赖 - Windows
+      - name: Install Windows dependencies
+        if: matrix.goos == 'windows'
+        run: |
+          choco install mingw -y
+
+      # 下载和提取FIO源码
       - name: Download and extract FIO
         run: |
-          wget https://github.com/axboe/fio/archive/refs/tags/fio-3.39.zip
+          curl -L -o fio-3.39.zip https://github.com/axboe/fio/archive/refs/tags/fio-3.39.zip
           unzip fio-3.39.zip
           mv fio-fio-3.39 fio-src
+        shell: bash
 
-      - name: Build FIO for ${{ matrix.goos }}-${{ matrix.goarch }}
+      # 为ARM架构设置交叉编译工具 (仅Linux-ARM)
+      - name: Setup cross-compiler for ARM
+        if: matrix.goos == 'linux' && (matrix.goarch == 'arm' || matrix.goarch == 'arm64')
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+
+      # 为x86/386架构设置交叉编译工具 (仅Linux-386)
+      - name: Setup cross-compiler for 386
+        if: matrix.goos == 'linux' && matrix.goarch == '386'
+        run: |
+          sudo apt-get install -y gcc-multilib
+
+      # 编译FIO - Linux AMD64 原生
+      - name: Build FIO for Linux AMD64
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: |
           cd fio-src
-          make clean
-          ../dockcross-${{ matrix.goarch }} bash -c "make CC=gcc LDFLAGS='-static'"
+          ./configure
+          make -j$(nproc)
           mkdir -p ../bin
           cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
 
+      # 编译FIO - Linux ARM64
+      - name: Build FIO for Linux ARM64
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: |
+          cd fio-src
+          ./configure --cc=aarch64-linux-gnu-gcc
+          make -j$(nproc)
+          mkdir -p ../bin
+          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      # 编译FIO - Linux ARM
+      - name: Build FIO for Linux ARM
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm'
+        run: |
+          cd fio-src
+          ./configure --cc=arm-linux-gnueabihf-gcc
+          make -j$(nproc)
+          mkdir -p ../bin
+          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      # 编译FIO - Linux 386
+      - name: Build FIO for Linux 386
+        if: matrix.goos == 'linux' && matrix.goarch == '386'
+        run: |
+          cd fio-src
+          CFLAGS="-m32" LDFLAGS="-m32" ./configure
+          make -j$(nproc)
+          mkdir -p ../bin
+          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      # 编译FIO - macOS
+      - name: Build FIO for macOS
+        if: matrix.goos == 'darwin'
+        run: |
+          cd fio-src
+          ./configure
+          make -j$(sysctl -n hw.ncpu)
+          mkdir -p ../bin
+          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      # 编译FIO - Windows
+      - name: Build FIO for Windows
+        if: matrix.goos == 'windows'
+        run: |
+          cd fio-src
+          # Windows使用MinGW编译
+          make -j$env:NUMBER_OF_PROCESSORS
+          mkdir -p ../bin
+          cp fio.exe ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+        shell: pwsh
+
+      # 上传构建的二进制文件
       - name: Upload binaries as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fio-binaries
-          path: bin/*
+          name: fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
