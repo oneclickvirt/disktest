@@ -48,7 +48,7 @@ jobs:
           - goos: freebsd
             goarch: arm
             goarm: 7
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
@@ -56,6 +56,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt update
+          sudo dpkg --add-architecture arm64
+          sudo dpkg --add-architecture armhf
           sudo apt update
           sudo apt install -y build-essential gcc-multilib g++-multilib \
             crossbuild-essential-arm64 crossbuild-essential-armhf \
