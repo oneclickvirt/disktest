@@ -54,15 +54,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Set up Dockcross
         run: |
-          sudo apt update
-          sudo dpkg --add-architecture arm64
-          sudo dpkg --add-architecture armhf
-          sudo apt update
-          sudo apt install -y build-essential gcc-multilib g++-multilib \
-            crossbuild-essential-arm64 crossbuild-essential-armhf \
-            clang llvm
+          docker run --rm dockcross/linux-${{ matrix.goarch }} > dockcross-${{ matrix.goarch }}
+          chmod +x dockcross-${{ matrix.goarch }}
 
       - name: Download and extract FIO
         run: |
@@ -74,30 +69,7 @@ jobs:
         run: |
           cd fio-src
           make clean
-          case "${{ matrix.goos }}-${{ matrix.goarch }}" in
-            linux-amd64)    CC=gcc ;;
-            linux-386)      CC=gcc -m32 ;;
-            linux-arm64)    CC=aarch64-linux-gnu-gcc ;;
-            linux-arm)      CC=arm-linux-gnueabihf-gcc ;;
-            linux-riscv64)  CC=riscv64-linux-gnu-gcc ;;
-            linux-mips64)   CC=mips64-linux-gnuabi64-gcc ;;
-            linux-mips64le) CC=mips64el-linux-gnuabi64-gcc ;;
-            linux-mips)     CC=mips-linux-gnu-gcc ;;
-            linux-mipsle)   CC=mipsel-linux-gnu-gcc ;;
-            linux-ppc64)    CC=powerpc64-linux-gnu-gcc ;;
-            linux-ppc64le)  CC=powerpc64le-linux-gnu-gcc ;;
-            windows-amd64)  CC=x86_64-w64-mingw32-gcc ;;
-            windows-386)    CC=i686-w64-mingw32-gcc ;;
-            windows-arm64)  CC=aarch64-w64-mingw32-gcc ;;
-            windows-arm)    CC=arm-none-eabi-gcc ;;
-            darwin-amd64)   CC=o64-clang ;;
-            darwin-arm64)   CC=o64-clang ;;
-            freebsd-amd64)  CC=clang ;;
-            freebsd-arm64)  CC=clang ;;
-            freebsd-arm)    CC=clang ;;
-            *) echo "Unsupported target"; exit 1 ;;
-          esac
-          make CC=$CC LDFLAGS="-static"
+          ../dockcross-${{ matrix.goarch }} bash -c "make CC=gcc LDFLAGS='-static'"
           mkdir -p ../bin
           cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
 
