@@ -251,6 +251,22 @@ func formatSpeed(raw interface{}, rawType string) string {
 	return strings.Join([]string{result, unit}, " ")
 }
 
+// checkSystemFio 检查系统是否安装了 fio
+func checkSystemFio() bool {
+	if EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+	}
+	cmd := exec.Command("fio", "--version")
+	if err := cmd.Run(); err != nil {
+		if EnableLoger {
+			Logger.Info("系统未安装 fio 或 fio 不可用: " + err.Error())
+		}
+		return false
+	}
+	return true
+}
+
 // checkFioIOEngine 检查哪个IO引擎可用
 func checkFioIOEngine() string {
 	if EnableLoger {
@@ -266,13 +282,33 @@ func checkFioIOEngine() string {
 		}
 		sudoAvailable = false
 	}
+	
+	// 检查系统是否安装了fio，如果没有则尝试使用嵌入的二进制文件
+	fioPath := "fio"
+	systemFioAvailable := checkSystemFio()
+	if !systemFioAvailable {
+		// 尝试使用嵌入的二进制文件
+		embeddedFio, err := getFioBinary()
+		if err == nil {
+			fioPath = embeddedFio
+			if EnableLoger {
+				Logger.Info("使用嵌入的fio二进制文件: " + embeddedFio)
+			}
+		} else {
+			if EnableLoger {
+				Logger.Info("无法获取嵌入的fio二进制文件: " + err.Error())
+			}
+			return "psync" // 如果无法获取嵌入的二进制文件，默认返回psync
+		}
+	}
+	
 	// 使用或不使用sudo执行fio测试
 	var cmd *exec.Cmd
 	// 首先尝试libaio
-	if sudoAvailable {
-		cmd = exec.Command("sudo", "fio", "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+	if sudoAvailable && systemFioAvailable {
+		cmd = exec.Command("sudo", fioPath, "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
 	} else {
-		cmd = exec.Command("fio", "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+		cmd = exec.Command(fioPath, "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
 	}
 	_, err := cmd.CombinedOutput()
 	defer func() {
@@ -284,11 +320,12 @@ func checkFioIOEngine() string {
 		}
 		return "libaio"
 	}
+	
 	// 如果libaio失败，尝试posixaio
-	if sudoAvailable {
-		cmd = exec.Command("sudo", "fio", "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+	if sudoAvailable && systemFioAvailable {
+		cmd = exec.Command("sudo", fioPath, "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
 	} else {
-		cmd = exec.Command("fio", "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+		cmd = exec.Command(fioPath, "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
 	}
 	_, err = cmd.CombinedOutput()
 	defer func() {
@@ -300,6 +337,7 @@ func checkFioIOEngine() string {
 		}
 		return "posixaio"
 	}
+	
 	// 如果都失败了，返回默认的psync引擎
 	if EnableLoger {
 		Logger.Info("libaio和posixaio都不可用，使用psync")
