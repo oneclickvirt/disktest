@@ -1,0 +1,105 @@
+name: Build FIO Binaries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        goos: [windows, freebsd, linux, darwin]
+        goarch: [amd64, 386]
+        exclude:
+          - goarch: 386
+            goos: darwin
+        include:
+          - goos: windows
+            goarch: 386
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+          - goos: windows
+            goarch: arm
+            goarm: 7
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: riscv64
+          - goos: linux
+            goarch: mips64
+          - goos: linux
+            goarch: mips64le
+          - goos: linux
+            goarch: mipsle
+          - goos: linux
+            goarch: mips
+          - goos: linux
+            goarch: ppc64
+          - goos: linux
+            goarch: ppc64le
+          - goos: freebsd
+            goarch: arm64
+          - goos: freebsd
+            goarch: arm
+            goarm: 7
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential gcc-multilib g++-multilib \
+            crossbuild-essential-arm64 crossbuild-essential-armhf \
+            clang llvm
+
+      - name: Download and extract FIO
+        run: |
+          wget https://github.com/axboe/fio/archive/refs/tags/fio-3.39.zip
+          unzip fio-3.39.zip
+          mv fio-fio-3.39 fio-src
+
+      - name: Build FIO for ${{ matrix.goos }}-${{ matrix.goarch }}
+        run: |
+          cd fio-src
+          make clean
+          case "${{ matrix.goos }}-${{ matrix.goarch }}" in
+            linux-amd64)    CC=gcc ;;
+            linux-386)      CC=gcc -m32 ;;
+            linux-arm64)    CC=aarch64-linux-gnu-gcc ;;
+            linux-arm)      CC=arm-linux-gnueabihf-gcc ;;
+            linux-riscv64)  CC=riscv64-linux-gnu-gcc ;;
+            linux-mips64)   CC=mips64-linux-gnuabi64-gcc ;;
+            linux-mips64le) CC=mips64el-linux-gnuabi64-gcc ;;
+            linux-mips)     CC=mips-linux-gnu-gcc ;;
+            linux-mipsle)   CC=mipsel-linux-gnu-gcc ;;
+            linux-ppc64)    CC=powerpc64-linux-gnu-gcc ;;
+            linux-ppc64le)  CC=powerpc64le-linux-gnu-gcc ;;
+            windows-amd64)  CC=x86_64-w64-mingw32-gcc ;;
+            windows-386)    CC=i686-w64-mingw32-gcc ;;
+            windows-arm64)  CC=aarch64-w64-mingw32-gcc ;;
+            windows-arm)    CC=arm-none-eabi-gcc ;;
+            darwin-amd64)   CC=o64-clang ;;
+            darwin-arm64)   CC=o64-clang ;;
+            freebsd-amd64)  CC=clang ;;
+            freebsd-arm64)  CC=clang ;;
+            freebsd-arm)    CC=clang ;;
+            *) echo "Unsupported target"; exit 1 ;;
+          esac
+          make CC=$CC LDFLAGS="-static"
+          mkdir -p ../bin
+          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      - name: Upload binaries as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fio-binaries
+          path: bin/*

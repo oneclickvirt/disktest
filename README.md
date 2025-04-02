@@ -24,10 +24,26 @@
 ## TODO
 
 - [ ] 正式测试前检测当前路径挂载盘剩余空间是否足够生成测试文件
-- [ ] fio测试在WIN系统中匹配自动下载exe文件调用/Golang原生实现dd测试
 - [ ] 优化测试失败时的报错和输出
 - [ ] 修复WIN系统的虚拟下的CPU测试无法使用winsat的问题
 - [ ] 适配MACOS系统测试
+
+
+sudo apt update
+sudo apt install build-essential gcc make libaio-dev zlib1g-dev -y
+sudo apt update
+sudo apt install build-essential crossbuild-essential-arm64 crossbuild-essential-armhf
+
+wget https://github.com/axboe/fio/archive/refs/tags/fio-3.39.zip
+unzip fio-3.39.zip
+rm -rf fio-3.39.zip
+cd fio-fio-3.39
+./configure
+ make clean
+  make
+  cp fio ../bin/fio-linux-amd64
+strip fio  # 去掉调试信息，减小体积
+
 
 
 ## 使用
