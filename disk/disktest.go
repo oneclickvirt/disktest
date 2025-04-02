@@ -1,7 +1,6 @@
 package disk
 
 import (
-	"embed"
 	"fmt"
 	"io"
 	"os"
@@ -15,39 +14,6 @@ import (
 	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
 )
-
-//go:embed bin/*
-var binFiles embed.FS
-
-// getFioBinary 获取与当前系统匹配的 fio 二进制文件
-func getFioBinary() (string, error) {
-	osType := runtime.GOOS
-	archType := runtime.GOARCH
-	binaryName := fmt.Sprintf("fio-%s-%s", osType, archType)
-	if osType == "windows" {
-		binaryName += ".exe"
-	}
-	// 创建临时目录存放二进制文件
-	tempDir, err := os.MkdirTemp("", "disktest")
-	if err != nil {
-		return "", fmt.Errorf("创建临时目录失败: %v", err)
-	}
-	// 读取嵌入的二进制文件
-	binPath := filepath.Join("bin", binaryName)
-	fileContent, err := binFiles.ReadFile(binPath)
-	if err != nil {
-		return "", fmt.Errorf("读取嵌入的 fio 二进制文件失败: %v", err)
-	}
-	// 写入临时文件
-	tempFile := filepath.Join(tempDir, binaryName)
-	if err := os.WriteFile(tempFile, fileContent, 0755); err != nil {
-		return "", fmt.Errorf("写入临时 fio 文件失败: %v", err)
-	}
-	if EnableLoger {
-		Logger.Info("使用嵌入的 fio 二进制文件: " + tempFile)
-	}
-	return tempFile, nil
-}
 
 // commandExists 检查命令是否存在
 func commandExists(cmd string) bool {
