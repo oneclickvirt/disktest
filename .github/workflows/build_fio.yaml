@@ -5,149 +5,262 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          # Linux builds
-          - os: ubuntu-22.04
-            goos: linux
-            goarch: amd64
-          - os: ubuntu-22.04
-            goos: linux
-            goarch: 386
-          - os: ubuntu-22.04
-            goos: linux
-            goarch: arm64
-          - os: ubuntu-22.04
-            goos: linux
-            goarch: arm
-            goarm: 7
-            
-          # Windows builds
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-          - os: windows-latest
-            goos: windows
-            goarch: 386
-            
-          # macOS builds
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 安装依赖 - Linux
-      - name: Install Linux dependencies
-        if: matrix.goos == 'linux'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          
+      - name: Download and extract FIO
+        run: |
+          wget https://github.com/axboe/fio/archive/refs/tags/fio-3.39.zip
+          unzip fio-3.39.zip
+          mv fio-fio-3.39 fio-src
+
+      - name: Install cross-compilation toolchains
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libaio-dev zlib1g-dev
-
-      # 安装依赖 - macOS
-      - name: Install macOS dependencies
-        if: matrix.goos == 'darwin'
-        run: |
-          brew install libaio
-
-      # 安装依赖 - Windows
-      - name: Install Windows dependencies
-        if: matrix.goos == 'windows'
-        run: |
-          choco install mingw -y
-
-      # 下载和提取FIO源码
-      - name: Download and extract FIO
-        run: |
-          curl -L -o fio-3.39.zip https://github.com/axboe/fio/archive/refs/tags/fio-3.39.zip
-          unzip fio-3.39.zip
-          mv fio-fio-3.39 fio-src
-        shell: bash
-
-      # 为ARM架构设置交叉编译工具 (仅Linux-ARM)
-      - name: Setup cross-compiler for ARM
-        if: matrix.goos == 'linux' && (matrix.goarch == 'arm' || matrix.goarch == 'arm64')
-        run: |
+          
+          # ARM 和 ARM64 工具链
           sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
-
-      # 为x86/386架构设置交叉编译工具 (仅Linux-386)
-      - name: Setup cross-compiler for 386
-        if: matrix.goos == 'linux' && matrix.goarch == '386'
-        run: |
+          
+          # MIPS 系列工具链
+          sudo apt-get install -y gcc-mips-linux-gnu gcc-mipsel-linux-gnu
+          sudo apt-get install -y gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
+          
+          # PowerPC 工具链
+          sudo apt-get install -y gcc-powerpc64-linux-gnu gcc-powerpc64le-linux-gnu
+          
+          # RISC-V 工具链
+          sudo apt-get install -y gcc-riscv64-linux-gnu
+          
+          # 386架构支持
           sudo apt-get install -y gcc-multilib
 
-      # 编译FIO - Linux AMD64 原生
-      - name: Build FIO for Linux AMD64
-        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-        run: |
-          cd fio-src
-          ./configure
-          make -j$(nproc)
-          mkdir -p ../bin
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          # 创建交叉编译帮助脚本
+          cat > build-fio.sh << 'EOF'
+          #!/bin/bash
+          set -e
 
-      # 编译FIO - Linux ARM64
-      - name: Build FIO for Linux ARM64
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
-        run: |
-          cd fio-src
-          ./configure --cc=aarch64-linux-gnu-gcc
-          make -j$(nproc)
-          mkdir -p ../bin
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          OS=$1
+          ARCH=$2
+          ARM=$3
+          OUTPUT_DIR=$4
 
-      # 编译FIO - Linux ARM
-      - name: Build FIO for Linux ARM
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm'
-        run: |
+          echo "Building FIO for $OS/$ARCH"
           cd fio-src
-          ./configure --cc=arm-linux-gnueabihf-gcc
-          make -j$(nproc)
-          mkdir -p ../bin
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          make clean
 
-      # 编译FIO - Linux 386
-      - name: Build FIO for Linux 386
-        if: matrix.goos == 'linux' && matrix.goarch == '386'
+          # 根据平台/架构配置编译
+          case "$OS-$ARCH" in
+            linux-amd64)
+              ./configure
+              ;;
+            linux-386)
+              CFLAGS="-m32" LDFLAGS="-m32" ./configure
+              ;;
+            linux-arm64)
+              ./configure --cc=aarch64-linux-gnu-gcc
+              ;;
+            linux-arm)
+              ./configure --cc=arm-linux-gnueabihf-gcc
+              ;;
+            linux-riscv64)
+              ./configure --cc=riscv64-linux-gnu-gcc
+              ;;
+            linux-mips64)
+              ./configure --cc=mips64-linux-gnuabi64-gcc
+              ;;
+            linux-mips64le)
+              ./configure --cc=mips64el-linux-gnuabi64-gcc
+              ;;
+            linux-mips)
+              ./configure --cc=mips-linux-gnu-gcc
+              ;;
+            linux-mipsle)
+              ./configure --cc=mipsel-linux-gnu-gcc
+              ;;
+            linux-ppc64)
+              ./configure --cc=powerpc64-linux-gnu-gcc
+              ;;
+            linux-ppc64le)
+              ./configure --cc=powerpc64le-linux-gnu-gcc
+              ;;
+            freebsd-*)
+              # FreeBSD需要特殊处理，这里是简化处理
+              if [ "$ARCH" = "amd64" ]; then
+                ./configure
+              elif [ "$ARCH" = "386" ]; then
+                CFLAGS="-m32" LDFLAGS="-m32" ./configure
+              elif [ "$ARCH" = "arm64" ]; then
+                ./configure --cc=aarch64-linux-gnu-gcc
+              elif [ "$ARCH" = "arm" ]; then
+                ./configure --cc=arm-linux-gnueabihf-gcc
+              fi
+              ;;
+            windows-*)
+              # Windows编译
+              make CFLAGS="-D_GNU_SOURCE"
+              ;;
+            darwin-*)
+              # macOS编译
+              ./configure
+              ;;
+            *)
+              echo "不支持的平台/架构组合: $OS-$ARCH"
+              exit 1
+              ;;
+          esac
+
+          # 如果不是Windows，执行make
+          if [ "$OS" != "windows" ]; then
+            make -j$(nproc)
+          fi
+
+          # 创建输出目录并复制二进制文件
+          mkdir -p "$OUTPUT_DIR"
+          if [ "$OS" = "windows" ]; then
+            cp fio.exe "$OUTPUT_DIR/fio.exe"
+          else
+            cp fio "$OUTPUT_DIR/fio"
+          fi
+          EOF
+          
+          chmod +x build-fio.sh
+
+      - name: Create simple go.mod for GoReleaser
         run: |
-          cd fio-src
-          CFLAGS="-m32" LDFLAGS="-m32" ./configure
-          make -j$(nproc)
-          mkdir -p ../bin
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          # 创建一个最小的Go模块供GoReleaser使用
+          echo 'module fio-builder' > go.mod
+          echo 'go 1.21' >> go.mod
+          mkdir -p cmd/fio-builder
+          echo 'package main; func main() {}' > cmd/fio-builder/main.go
 
-      # 编译FIO - macOS
-      - name: Build FIO for macOS
-        if: matrix.goos == 'darwin'
+      - name: Create .goreleaser.yaml
         run: |
-          cd fio-src
-          ./configure
-          make -j$(sysctl -n hw.ncpu)
-          mkdir -p ../bin
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          cat > .goreleaser.yaml << 'EOF'
+          builds:
+            - id: fio
+              binary: fio
+              skip: false
+              dir: cmd/fio-builder
+              hooks:
+                pre: |
+                  #!/bin/bash
+                  set -e
+                  ../build-fio.sh {{ .Os }} {{ .Arch }} {{ if .Arm }}{{ .Arm }}{{ else }}0{{ end }} {{ dir .Path }}
+              goos:
+                - windows
+                - freebsd
+                - linux
+                - darwin
+              goarch:
+                - amd64
+                - 386
+                - arm64
+                - arm
+                - riscv64
+                - mips64
+                - mips64le
+                - mipsle
+                - mips
+                - ppc64
+                - ppc64le
+              goarm:
+                - 7
+              ignore:
+                - goos: darwin
+                  goarch: 386
+                - goos: darwin
+                  goarch: arm
+                - goos: darwin
+                  goarch: riscv64
+                - goos: darwin
+                  goarch: mips64
+                - goos: darwin
+                  goarch: mips64le
+                - goos: darwin
+                  goarch: mipsle
+                - goos: darwin
+                  goarch: mips
+                - goos: darwin
+                  goarch: ppc64
+                - goos: darwin
+                  goarch: ppc64le
+                - goos: freebsd
+                  goarch: riscv64
+                - goos: freebsd
+                  goarch: mips64
+                - goos: freebsd
+                  goarch: mips64le
+                - goos: freebsd
+                  goarch: mipsle
+                - goos: freebsd
+                  goarch: mips
+                - goos: freebsd
+                  goarch: ppc64
+                - goos: freebsd
+                  goarch: ppc64le
+                - goos: windows
+                  goarch: riscv64
+                - goos: windows
+                  goarch: mips64
+                - goos: windows
+                  goarch: mips64le
+                - goos: windows
+                  goarch: mipsle
+                - goos: windows
+                  goarch: mips
+                - goos: windows
+                  goarch: ppc64
+                - goos: windows
+                  goarch: ppc64le
+              env:
+                - CGO_ENABLED=0
+              flags:
+                - -trimpath
+              ldflags:
+                - -s -w
 
-      # 编译FIO - Windows
-      - name: Build FIO for Windows
-        if: matrix.goos == 'windows'
-        run: |
-          cd fio-src
-          # Windows使用MinGW编译
-          make -j$env:NUMBER_OF_PROCESSORS
-          mkdir -p ../bin
-          cp fio.exe ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}.exe
-        shell: pwsh
+          archives:
+            - format: tar.gz
+              name_template: >-
+                fio_
+                {{- .Os }}_
+                {{- if eq .Arch "amd64" }}x86_64
+                {{- else if eq .Arch "386" }}i386
+                {{- else }}{{ .Arch }}{{ end }}
+                {{- if .Arm }}v{{ .Arm }}{{ end }}
+              format_overrides:
+                - goos: windows
+                  format: zip
 
-      # 上传构建的二进制文件
-      - name: Upload binaries as artifacts
+          snapshot:
+            name_template: "{{ .Tag }}-next"
+
+          checksum:
+            name_template: 'checksums.txt'
+
+          changelog:
+            skip: true
+          EOF
+
+      - name: Build with GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --snapshot --clean --skip=validate --timeout 120m
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fio-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          name: fio-binaries
+          path: dist/*
