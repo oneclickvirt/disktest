@@ -10,14 +10,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         
-      - name: Create bin directory
-        run: mkdir -p bin
+      - name: Create disk/bin directory
+        run: mkdir -p disk/bin
         
       - name: Upload bin directory
         uses: actions/upload-artifact@v4
         with:
           name: bin-directory
-          path: bin/
+          path: disk/bin/
 
   build:
     needs: prepare
@@ -93,7 +93,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bin-directory
-          path: bin/
+          path: disk/bin/
 
       - name: Setup FIO build environment (Linux)
         if: runner.os == 'Linux'
@@ -147,7 +147,7 @@ jobs:
           cd fio-src
           ./configure
           make -j$(nproc) LDFLAGS="-static"
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          cp fio ../disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
         continue-on-error: true
 
       - name: Build FIO static binary (Linux - 386)
@@ -156,7 +156,7 @@ jobs:
           cd fio-src
           CFLAGS="-m32" LDFLAGS="-m32 -static" ./configure
           make -j$(nproc)
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          cp fio ../disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
         continue-on-error: true
 
       - name: Build FIO static binary (Linux - ARM64)
@@ -165,7 +165,7 @@ jobs:
           cd fio-src
           CC=aarch64-linux-gnu-gcc ./configure
           make -j$(nproc) LDFLAGS="-static"
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          cp fio ../disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
         continue-on-error: true
 
       - name: Build FIO static binary (Linux - ARMv7)
@@ -174,7 +174,7 @@ jobs:
           cd fio-src
           CC=arm-linux-gnueabihf-gcc ./configure
           make -j$(nproc) LDFLAGS="-static"
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}v${{ matrix.goarm }}
+          cp fio ../disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}v${{ matrix.goarm }}
         continue-on-error: true
 
       - name: Build FIO static binary (Linux - Special Architectures)
@@ -201,7 +201,7 @@ jobs:
           
           CC=${CROSS_CC} ./configure
           make -j$(nproc) LDFLAGS="-static"
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          cp fio ../disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
         continue-on-error: true
 
       - name: Build FIO static binary (macOS)
@@ -210,14 +210,14 @@ jobs:
           cd fio-src
           ./configure
           make -j$(sysctl -n hw.ncpu)
-          cp fio ../bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
+          cp fio ../disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}
         continue-on-error: true
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: fio-${{ matrix.target }}
-          path: bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm && 'v'}}${{ matrix.goarm }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          path: disk/bin/fio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm && 'v'}}${{ matrix.goarm }}${{ matrix.goos == 'windows' && '.exe' || '' }}
         continue-on-error: true
 
   collect:
@@ -234,27 +234,27 @@ jobs:
           
       - name: Organize binaries
         run: |
-          mkdir -p bin/
+          mkdir -p disk/bin/
           
-          # 从所有单独的构建工件中复制文件到bin目录
-          find artifacts/ -type f -not -path "*/bin-directory/*" -exec cp {} bin/ \;
+          # 从所有单独的构建工件中复制文件到disk/bin目录
+          find artifacts/ -type f -not -path "*/bin-directory/*" -exec cp {} disk/bin/ \;
           
           # 列出所有收集到的二进制文件
           echo "Successfully built binaries:"
-          ls -la bin/
+          ls -la disk/bin/
           
       - name: Upload combined bin directory
         uses: actions/upload-artifact@v4
         with:
           name: fio-binaries
-          path: bin/
+          path: disk/bin/
           
       - name: Commit binaries to repository
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          git add bin/
+          git add disk/bin/
           git commit -m "fix: Update FIO static binaries [skip ci]" || echo "No changes to commit"
           git push
         continue-on-error: true
