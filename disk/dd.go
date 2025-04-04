@@ -86,7 +86,7 @@ func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
 		return "", fmt.Errorf("execDDTest: ddCmd is NULL")
 	}
 	parts := strings.Split(ddCmd, " ")
-	cmd2 := exec.Command(parts[0], append(parts[1:], "sudo", "dd", "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")...)
+	cmd2 := exec.Command(parts[0], append(parts[1:], "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")...)
 	stderr2, err := cmd2.StderrPipe()
 	if err != nil {
 		loggerInsert(Logger, "failed to get StderrPipe: "+err.Error())
