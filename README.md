@@ -9,7 +9,7 @@
 ## 功能
 
 - [x] 使用```winsat```测试
-- [x] 使用```dd```测试
+- [x] 使用```dd```测试，同时默认自带dd依赖无需额外安装
 - [x] 使用```fio```测试，支持自动选择IO引擎测试，测试优先级为```libaio > posixaio > psync```，同时默认自带fio依赖无需额外安装
 - [x] 支持双语输出，以```-l```指定```zh```或```en```可指定输出的语言，未指定时默认使用中文输出
 - [x] 支持指定测试方式，以```-m```指定```dd```或```fio```指定测试方式，未指定时默认使用```fio```进行测试
@@ -17,12 +17,11 @@
 - [x] 支持指定路径IO测试，以```-p```指定路径
 - [x] 全平台编译支持
 
-不使用```sysbench```进行硬盘IO测试，因为默认设置下```fio```测试效果比```sysbench```测试更优，且```fio```的维护者比```sysbench```的维护者更活跃。
+PS: 不使用```sysbench```进行硬盘IO测试，因为默认设置下```fio```测试效果比```sysbench```测试更贴近机器本身的性能，且```fio```的维护者比```sysbench```的维护者更活跃。
 
 ## TODO
 
 - [ ] 正式测试前检测当前路径挂载盘剩余空间是否足够生成测试文件
-- [ ] 修复WIN系统的虚拟下的CPU测试无法使用winsat的问题
 - [ ] 适配MACOS系统测试
 
 ## 使用
@@ -71,18 +70,6 @@ Usage: disktest [options]
 
 更多架构请查看 https://github.com/oneclickvirt/disktest/releases/tag/output
 
-dd测试：
-
-![图片](https://github.com/oneclickvirt/disktest/assets/103393591/163b1150-dc45-4d53-abbf-c6e1acca4e19)
-
-fio测试：
-
-![图片](https://github.com/oneclickvirt/disktest/assets/103393591/3052b430-2d93-4a07-9e12-0a911ffb36c3)
-
-winsat测试：
-
-![1716466264315](https://github.com/oneclickvirt/disktest/assets/103393591/505b9525-216c-4e9a-b602-65382177d414)
-
 ## 卸载
 
 ```
@@ -95,3 +82,17 @@ rm -rf /usr/bin/disktest
 ```
 go get github.com/oneclickvirt/disktest@latest
 ```
+
+## 测试图
+
+dd测试：
+
+![图片](https://github.com/oneclickvirt/disktest/assets/103393591/163b1150-dc45-4d53-abbf-c6e1acca4e19)
+
+fio测试：
+
+![图片](https://github.com/oneclickvirt/disktest/assets/103393591/3052b430-2d93-4a07-9e12-0a911ffb36c3)
+
+winsat测试：
+
+![1716466264315](https://github.com/oneclickvirt/disktest/assets/103393591/505b9525-216c-4e9a-b602-65382177d414)

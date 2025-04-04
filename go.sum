@@ -1,7 +1,11 @@
 github.com/go-ole/go-ole v1.2.6 h1:/Fpf6oFPoeFik9ty7siob0G6Ke8QvQEuVcuChpwXzpY=
 github.com/go-ole/go-ole v1.2.6/go.mod h1:pprOEPIfldk/42T2oK7lQ4v4JSDwmV0As9GaiUsvbm0=
+github.com/oneclickvirt/dd v0.0.1-20250404124549 h1:QT2QJaMoZabUijqN2a/vzC13ILeKwQR3vatFZxKszW0=
+github.com/oneclickvirt/dd v0.0.1-20250404124549/go.mod h1:tImu9sPTkLWo2tf1dEN1xQzrylWKauj9hbU8PHfyAeU=
 github.com/oneclickvirt/defaultset v0.0.2-20240624082446 h1:5Pg3mK/u/vQvSz7anu0nxzrNdELi/AcDAU1mMsmPzyc=
 github.com/oneclickvirt/defaultset v0.0.2-20240624082446/go.mod h1:e9Jt4tf2sbemCtc84/XgKcHy9EZ2jkc5x2sW1NiJS+E=
+github.com/oneclickvirt/fio v0.0.1-20250404141714 h1:rnNQ46O6kE+mFKmPDiWohNMbLr8xR6hzTgAsZcah4QE=
+github.com/oneclickvirt/fio v0.0.1-20250404141714/go.mod h1:NIq+XYTey68KNERGIy/oRDlzpwLzBVoHOCiqX8didsE=
 github.com/shirou/gopsutil v3.21.11+incompatible h1:+1+c1VGhc88SSonWP6foOcLhvnKlUeu/erjjvaPEYiI=
 github.com/shirou/gopsutil v3.21.11+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMTu2PcXUg8+E1lC7eC3UO/RA=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=

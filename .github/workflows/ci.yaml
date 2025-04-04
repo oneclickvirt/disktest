@@ -13,19 +13,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+
       - name: Test
         run: go test ./... -coverprofile=coverage.txt
+
       - name: Create Tag
         if: success() # 仅在测试成功时运行
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-          TAG="v0.0.6-$(date +'%Y%m%d%H%M%S')"
+          TAG="v0.0.7-$(date +'%Y%m%d%H%M%S')"
+          echo "TAG=$TAG" >> $GITHUB_ENV
           git tag $TAG
           git push origin $TAG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update README
+        if: success()
+        run: |
+          sed -i "s|^go get github.com/oneclickvirt/disktest@.*|go get github.com/oneclickvirt/disktest@${{ env.TAG }}|" README.md
+          git add README.md
+          git commit -m "Update README.md with new version ${{ env.TAG }}"
+          git push origin HEAD
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

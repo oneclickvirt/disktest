@@ -8,50 +8,21 @@ import (
 	"strings"
 
 	. "github.com/oneclickvirt/defaultset"
+	"github.com/oneclickvirt/fio"
+	"go.uber.org/zap"
 )
 
-// 获取硬盘性能数据
-func getDiskPerformance(device string) string {
+// commandExists 检查命令是否存在
+func commandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
+}
+
+// loggerInsert 插入日志
+func loggerInsert(Logger *zap.Logger, st string) {
 	if EnableLoger {
-		InitLogger()
-		defer Logger.Sync()
+		Logger.Info(st)
 	}
-	cmd := exec.Command("winsat", "disk", "-drive", device)
-	output, err := cmd.Output()
-	if err != nil {
-		if EnableLoger {
-			Logger.Info("cannot match winsat command: " + err.Error())
-		}
-		return ""
-	}
-	var result string
-	tempList := strings.Split(string(output), "\n")
-	for _, l := range tempList {
-		if strings.Contains(l, "> Disk  Random 16.0 Read") {
-			// 随机读取速度
-			tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Random 16.0 Read", ""))
-			if tempText != "" {
-				tpList := strings.Split(tempText, "MB/s")
-				result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
-			}
-		} else if strings.Contains(l, "> Disk  Sequential 64.0 Read") {
-			// 顺序读取速度
-			tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Sequential 64.0 Read", ""))
-			if tempText != "" {
-				tpList := strings.Split(tempText, "MB/s")
-				result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
-			}
-		} else if strings.Contains(l, "> Disk  Sequential 64.0 Write") {
-			// 顺序写入速度
-			tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Sequential 64.0 Write", ""))
-			if tempText != "" {
-				tpList := strings.Split(tempText, "MB/s")
-				result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
-			}
-		}
-	}
-	result += "\n"
-	return result
 }
 
 // isWritableMountpoint 检测挂载点是否为文件夹且可写入文件
@@ -63,32 +34,24 @@ func isWritableMountpoint(path string) bool {
 	// 检测 mountpoint 是否是一个文件夹
 	info, err := os.Stat(path)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("cannot stat path: " + err.Error())
-		}
+		loggerInsert(Logger, "cannot stat path: "+err.Error())
 		return false
 	}
 	if !info.IsDir() {
-		if EnableLoger {
-			Logger.Info("path is not a directory: " + path)
-		}
+		loggerInsert(Logger, "path is not a directory: "+path)
 		return false
 	}
 	// 尝试打开文件进行写入
 	file, err := os.OpenFile(path+"/.temp_write_check", os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("cannot open file for writing: " + err.Error())
-		}
+		loggerInsert(Logger, "cannot open file for writing: "+err.Error())
 		return false
 	}
 	defer file.Close()
 	// 删除临时文件
 	err = os.Remove(path + "/.temp_write_check")
 	if err != nil {
-		if EnableLoger {
-			Logger.Info("cannot remove temporary file: " + err.Error())
-		}
+		loggerInsert(Logger, "cannot remove temporary file: "+err.Error())
 	}
 	return true
 }
@@ -257,70 +220,41 @@ func checkFioIOEngine() string {
 		InitLogger()
 		defer Logger.Sync()
 	}
-	// 检查是否可以使用sudo
-	sudoAvailable := true
-	sudoCheck := exec.Command("sudo", "-n", "true")
-	if err := sudoCheck.Run(); err != nil {
-		if EnableLoger {
-			Logger.Info("sudo命令不可用或需要密码: " + err.Error())
-		}
-		sudoAvailable = false
-	}
 	// 检查系统是否安装了fio，如果没有则尝试使用嵌入的二进制文件
-	fioPath := "fio"
-	systemFioAvailable := commandExists("fio")
-	if !systemFioAvailable {
-		// 尝试使用嵌入的二进制文件
-		embeddedFio, err := getFioBinary()
-		if err == nil {
-			fioPath = embeddedFio
-			if EnableLoger {
-				Logger.Info("使用嵌入的fio二进制文件: " + embeddedFio)
-			}
-		} else {
-			if EnableLoger {
-				Logger.Info("无法获取嵌入的fio二进制文件: " + err.Error())
-			}
-			return "psync" // 如果无法获取嵌入的二进制文件，默认返回psync
-		}
-	}
-	// 使用或不使用sudo执行fio测试
-	var cmd *exec.Cmd
-	// 首先尝试libaio
-	if sudoAvailable && systemFioAvailable {
-		cmd = exec.Command("sudo", fioPath, "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
-	} else {
-		cmd = exec.Command(fioPath, "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
-	}
-	_, err := cmd.CombinedOutput()
-	defer func() {
-		_ = os.Remove("/tmp/fio_engine_check")
-	}()
+	embeddedCmd, embeddedPath, err := fio.GetFIO()
+	defer fio.CleanFio(embeddedPath)
 	if err == nil {
-		if EnableLoger {
-			Logger.Info("libaio IO引擎可用")
-		}
-		return "libaio"
-	}
-	// 如果libaio失败，尝试posixaio
-	if sudoAvailable && systemFioAvailable {
-		cmd = exec.Command("sudo", fioPath, "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+		loggerInsert(Logger, "使用嵌入的fio二进制文件: "+embeddedPath)
+
 	} else {
-		cmd = exec.Command(fioPath, "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")
+		loggerInsert(Logger, "无法获取嵌入的fio二进制文件: "+err.Error())
+		return "psync"
 	}
+	if embeddedCmd == "" {
+		return "psync"
+	}
+	// 首先尝试libaio
+	parts := strings.Split(embeddedCmd, " ")
+	cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
 	_, err = cmd.CombinedOutput()
 	defer func() {
 		_ = os.Remove("/tmp/fio_engine_check")
 	}()
 	if err == nil {
-		if EnableLoger {
-			Logger.Info("posixaio IO引擎可用")
-		}
+		loggerInsert(Logger, "libaio IO引擎可用")
+		return "libaio"
+	}
+	// 如果libaio失败，尝试posixaio
+	cmd = exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
+	_, err = cmd.CombinedOutput()
+	defer func() {
+		_ = os.Remove("/tmp/fio_engine_check")
+	}()
+	if err == nil {
+		loggerInsert(Logger, "posixaio IO引擎可用")
 		return "posixaio"
 	}
 	// 如果都失败了，返回默认的psync引擎
-	if EnableLoger {
-		Logger.Info("libaio和posixaio都不可用，使用psync")
-	}
+	loggerInsert(Logger, "libaio和posixaio都不可用，使用psync")
 	return "psync"
 }
