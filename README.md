@@ -82,7 +82,7 @@ rm -rf /usr/bin/disktest
 ## 在Golang中使用
 
 ```
-go get github.com/oneclickvirt/disktest@v0.0.7-20250406062845
+go get github.com/oneclickvirt/disktest@v0.0.8-20250425015826
 ```
 
 ## 测试图
