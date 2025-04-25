@@ -45,10 +45,27 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	} else {
 		result += "测试路径      块大小             直接写入(IOPS)                    直接读取(IOPS)\n"
 	}
+	var targetPath string
+	if testPath == "" {
+		if enableMultiCheck {
+			targetPath = ""
+		} else {
+			if isWritableMountpoint("/root") {
+				targetPath = "/root"
+			} else {
+				targetPath = "/tmp"
+			}
+		}
+	} else {
+		targetPath = testPath
+	}
 	blockNames := []string{"100MB-4K Block", "1GB-1M Block"}
 	blockCounts := []string{"25600", "1000"}
 	blockSizes := []string{"4k", "1M"}
 	blockFiles := []string{"100MB.test", "1GB.test"}
+	if targetPath != "" {
+		blockNames, blockCounts, blockFiles = adjustDDTestSize(targetPath, blockSizes, blockNames, blockCounts, blockFiles)
+	}
 	for ind, bs := range blockSizes {
 		loggerInsert(Logger, "开始测试块大小: "+bs+", 文件: "+blockFiles[ind])
 		if testPath == "" {
@@ -56,7 +73,8 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 				loggerInsert(Logger, "开始多路径测试")
 				for index, path := range mountPoints {
 					loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
-					result += ddTest1(path, devices[index], blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+					adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
+					result += ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
 				}
 			} else {
 				loggerInsert(Logger, "开始单路径测试(/root或/tmp)")
@@ -68,6 +86,64 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		}
 	}
 	return result
+}
+
+// adjustDDTestSize 根据可用磁盘空间调整DD测试参数
+func adjustDDTestSize(testPath string, blockSizes, blockNames, blockCounts, blockFiles []string) ([]string, []string, []string) {
+	adjustedBlockNames := make([]string, len(blockNames))
+	adjustedBlockCounts := make([]string, len(blockCounts))
+	adjustedBlockFiles := make([]string, len(blockFiles))
+	copy(adjustedBlockNames, blockNames)
+	copy(adjustedBlockCounts, blockCounts)
+	copy(adjustedBlockFiles, blockFiles)
+	usage, err := disk.Usage(testPath)
+	if err != nil {
+		loggerInsert(Logger, "获取磁盘使用情况失败: "+err.Error()+", 使用默认测试参数")
+		return blockNames, blockCounts, blockFiles
+	}
+	availableBytes := usage.Free
+	for i, bs := range blockSizes {
+		var requiredBytes uint64
+		if bs == "4k" {
+			requiredBytes = 100 * 1024 * 1024
+		} else { // bs == "1M"
+			requiredBytes = 1024 * 1024 * 1024
+		}
+		if availableBytes < requiredBytes*3/2 {
+			testSizeBytes := availableBytes / 5
+			minSizeBytes := uint64(20 * 1024 * 1024)
+			if testSizeBytes < minSizeBytes {
+				testSizeBytes = minSizeBytes
+			}
+			if bs == "4k" {
+				sizeMB := int(testSizeBytes / (1024 * 1024))
+				if sizeMB > 50 {
+					sizeMB = 50
+				}
+				adjustedBlockFiles[i] = fmt.Sprintf("%dMB.test", sizeMB)
+				adjustedBlockNames[i] = fmt.Sprintf("%dMB-4K Block", sizeMB)
+				adjustedBlockCounts[i] = fmt.Sprintf("%d", sizeMB*256)
+				loggerInsert(Logger, fmt.Sprintf("调整4K块测试大小为%dMB, 块数%s", sizeMB, adjustedBlockCounts[i]))
+			} else {
+				sizeMB := int(testSizeBytes / (1024 * 1024))
+				if sizeMB > 500 {
+					sizeMB = 500
+				}
+				if sizeMB >= 1024 {
+					adjustedBlockFiles[i] = fmt.Sprintf("%dGB.test", sizeMB/1024)
+					adjustedBlockNames[i] = fmt.Sprintf("%dGB-1M Block", sizeMB/1024)
+				} else {
+					adjustedBlockFiles[i] = fmt.Sprintf("%dMB.test", sizeMB)
+					adjustedBlockNames[i] = fmt.Sprintf("%dMB-1M Block", sizeMB)
+				}
+				adjustedBlockCounts[i] = fmt.Sprintf("%d", sizeMB)
+				loggerInsert(Logger, fmt.Sprintf("调整1M块测试大小为%dMB, 块数%s", sizeMB, adjustedBlockCounts[i]))
+			}
+		} else {
+			loggerInsert(Logger, fmt.Sprintf("可用空间充足(%d字节)，使用默认测试参数", availableBytes))
+		}
+	}
+	return adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles
 }
 
 // execDDTest 执行dd命令测试硬盘IO，并回传结果和测试错误

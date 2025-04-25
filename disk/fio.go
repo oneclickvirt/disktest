@@ -23,9 +23,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		Logger.Info("开始FIO测试硬盘")
 	}
 	var (
-		result, fioSize string
-		devices         []string
-		mountPoints     []string
+		result      string
+		devices     []string
+		mountPoints []string
 	)
 	parts, err := disk.Partitions(false)
 	if EnableLoger {
@@ -50,18 +50,19 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	} else {
 		result += "测试路径      块大小   读测试(IOPS)            写测试(IOPS)            总和(IOPS)\n"
 	}
-	// 生成测试文件
+	var defaultFioSize string
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
-		fioSize = "512M"
+		defaultFioSize = "512M"
 	} else {
-		fioSize = "2G"
+		defaultFioSize = "2G"
 	}
-	loggerInsert(Logger, "FIO测试文件大小: "+fioSize)
 	if testPath == "" {
 		if enableMultiCheck {
 			loggerInsert(Logger, "开始多路径FIO测试")
 			for index, path := range mountPoints {
 				loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
+				fioSize := adjustFioTestSize(path, defaultFioSize)
+				loggerInsert(Logger, "FIO测试文件大小: "+fioSize)
 				buildOutput, err := buildFioFile(path, fioSize)
 				defer os.Remove(path + "/test.fio")
 				if err == nil {
@@ -82,7 +83,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		} else {
 			loggerInsert(Logger, "开始单路径FIO测试(/root或/tmp)")
 			var buildPath string
-			tempText, err := buildFioFile("/root", fioSize)
+			rootFioSize := adjustFioTestSize("/root", defaultFioSize)
+			loggerInsert(Logger, "/root路径FIO测试文件大小: "+rootFioSize)
+			tempText, err := buildFioFile("/root", rootFioSize)
 			defer os.Remove("/root/test.fio")
 			if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
 				if EnableLoger {
@@ -94,7 +97,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 						Logger.Info("输出: " + tempText)
 					}
 				}
-				buildOutput, err := buildFioFile("/tmp", fioSize)
+				tmpFioSize := adjustFioTestSize("/tmp", defaultFioSize)
+				loggerInsert(Logger, "/tmp路径FIO测试文件大小: "+tmpFioSize)
+				buildOutput, err := buildFioFile("/tmp", tmpFioSize)
 				defer os.Remove("/tmp/test.fio")
 				if err == nil {
 					buildPath = "/tmp"
@@ -113,6 +118,11 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			if buildPath != "" {
 				loggerInsert(Logger, "使用路径进行FIO测试: "+buildPath)
 				time.Sleep(1 * time.Second)
+				fioSize := rootFioSize
+				if buildPath == "/tmp" {
+					tmpFioSize := ""
+					fioSize = tmpFioSize
+				}
 				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
 				if err == nil {
 					result += tempResult
@@ -123,6 +133,8 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		}
 	} else {
 		loggerInsert(Logger, "测试指定路径: "+testPath)
+		fioSize := adjustFioTestSize(testPath, defaultFioSize)
+		loggerInsert(Logger, "指定路径FIO测试文件大小: "+fioSize)
 		tempText, err := buildFioFile(testPath, fioSize)
 		defer os.Remove(testPath + "/test.fio")
 		if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
@@ -149,6 +161,52 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		}
 	}
 	return result
+}
+
+// adjustFioTestSize 根据可用磁盘空间调整FIO测试文件大小
+func adjustFioTestSize(testPath, defaultSize string) string {
+	usage, err := disk.Usage(testPath)
+	if err != nil {
+		loggerInsert(Logger, "获取磁盘使用情况失败: "+err.Error()+", 使用默认测试大小")
+		return defaultSize
+	}
+	var requiredBytes uint64
+	if defaultSize == "512M" {
+		requiredBytes = 512 * 1024 * 1024
+	} else { // defaultSize == "2G"
+		requiredBytes = 2 * 1024 * 1024 * 1024
+	}
+	availableBytes := usage.Free
+	if availableBytes < requiredBytes*3/2 {
+		testSizeBytes := availableBytes / 5
+		minSizeBytes := uint64(128 * 1024 * 1024)
+		if testSizeBytes < minSizeBytes {
+			testSizeBytes = minSizeBytes
+		}
+		maxSizeBytes := uint64(2 * 1024 * 1024 * 1024)
+		if testSizeBytes > maxSizeBytes {
+			testSizeBytes = maxSizeBytes
+		}
+		sizeStr := ""
+		if defaultSize == "512M" {
+			sizeMB := int(testSizeBytes / (1024 * 1024))
+			sizeStr = fmt.Sprintf("%dM", sizeMB)
+			loggerInsert(Logger, fmt.Sprintf("调整FIO测试大小从512M到%dM", sizeMB))
+		} else {
+			if testSizeBytes >= 1024*1024*1024 {
+				sizeGB := float64(testSizeBytes) / (1024 * 1024 * 1024)
+				sizeStr = fmt.Sprintf("%.1fG", sizeGB)
+				loggerInsert(Logger, fmt.Sprintf("调整FIO测试大小从2G到%.1fG", sizeGB))
+			} else {
+				sizeMB := int(testSizeBytes / (1024 * 1024))
+				sizeStr = fmt.Sprintf("%dM", sizeMB)
+				loggerInsert(Logger, fmt.Sprintf("调整FIO测试大小从2G到%dM", sizeMB))
+			}
+		}
+		return sizeStr
+	}
+	loggerInsert(Logger, fmt.Sprintf("可用空间充足(%d字节)，使用默认测试大小%s", availableBytes, defaultSize))
+	return defaultSize
 }
 
 // buildFioFile 生成对应文件

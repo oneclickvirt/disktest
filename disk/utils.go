@@ -175,10 +175,10 @@ func formatIOPS(raw interface{}, rawType string) string {
 
 // formatSpeed 转换fio的测试中的TEST的值
 // rawType 支持 string 或 float64
-func formatSpeed(raw interface{}, rawType string) string {
+func formatSpeed(raw interface{}, _ string) string {
 	var rawFloat float64
 	var err error
-	// 根据 rawType 确定如何处理 raw 的类型
+	// 根据 type 确定如何处理 raw 的类型
 	switch v := raw.(type) {
 	case string:
 		if v == "" {
