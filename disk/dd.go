@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -50,7 +51,9 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		if enableMultiCheck {
 			targetPath = ""
 		} else {
-			if isWritableMountpoint("/root") {
+			if runtime.GOOS == "darwin" {
+				targetPath = "/tmp"
+			} else if isWritableMountpoint("/root") {
 				targetPath = "/root"
 			} else {
 				targetPath = "/tmp"
@@ -193,7 +196,6 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 		InitLogger()
 		defer Logger.Sync()
 	}
-	// 写入测试
 	tempText, err := execDDTest("/dev/zero", path+blockFile, bs, blockCount)
 	defer os.Remove(path + blockFile)
 	if err != nil {
@@ -205,13 +207,11 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 		result += parsedResult
 		time.Sleep(1 * time.Second)
 	}
-	// 清理缓存, 避免影响测试结果
 	syncCmd := exec.Command("sync")
 	err = syncCmd.Run()
 	if err != nil {
 		loggerInsert(Logger, "sync command failed: "+err.Error())
 	}
-	// 读取测试
 	tempText, err = execDDTest(path+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove(path + blockFile)
 	if err != nil {
@@ -245,47 +245,57 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		InitLogger()
 		defer Logger.Sync()
 	}
-	// 写入测试
-	tempText, err := execDDTest("/dev/zero", "/root/"+blockFile, bs, blockCount)
-	defer os.Remove("/root/" + blockFile)
-	if err != nil {
-		loggerInsert(Logger, "execDDTest error for /root/ path: "+err.Error())
-	}
-	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
-		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
-		loggerInsert(Logger, "写入测试到/root/失败，尝试写入到/tmp/: "+tempText)
-		time.Sleep(1 * time.Second)
-		tempText, err = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
+	if runtime.GOOS == "darwin" {
+		testFilePath = "/tmp/"
+		result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		tempText, err := execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
 		defer os.Remove("/tmp/" + blockFile)
 		if err != nil {
 			loggerInsert(Logger, "execDDTest error for /tmp/ path: "+err.Error())
 		}
-		testFilePath = "/tmp/"
-		result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		parsedResult := parseResultDD(tempText, blockCount)
+		loggerInsert(Logger, "写入测试路径: "+testFilePath)
+		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
+		result += parsedResult
 	} else {
-		testFilePath = "/root/"
-		result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		tempText, err := execDDTest("/dev/zero", "/root/"+blockFile, bs, blockCount)
+		defer os.Remove("/root/" + blockFile)
+		if err != nil {
+			loggerInsert(Logger, "execDDTest error for /root/ path: "+err.Error())
+		}
+		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
+			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
+			loggerInsert(Logger, "写入测试到/root/失败，尝试写入到/tmp/: "+tempText)
+			time.Sleep(1 * time.Second)
+			tempText, err = execDDTest("/dev/zero", "/tmp/"+blockFile, bs, blockCount)
+			defer os.Remove("/tmp/" + blockFile)
+			if err != nil {
+				loggerInsert(Logger, "execDDTest error for /tmp/ path: "+err.Error())
+			}
+			testFilePath = "/tmp/"
+			result += fmt.Sprintf("%-10s", "/tmp") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		} else {
+			testFilePath = "/root/"
+			result += fmt.Sprintf("%-10s", "/root") + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		}
+		parsedResult := parseResultDD(tempText, blockCount)
+		loggerInsert(Logger, "写入测试路径: "+testFilePath)
+		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
+		result += parsedResult
 	}
-	parsedResult := parseResultDD(tempText, blockCount)
-	loggerInsert(Logger, "写入测试路径: "+testFilePath)
-	loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
-	result += parsedResult
-	// 清理缓存, 避免影响测试结果
 	if testFilePath == "/tmp/" {
 		syncCmd := exec.Command("sync")
-		err = syncCmd.Run()
+		err := syncCmd.Run()
 		if err != nil {
 			loggerInsert(Logger, "sync command failed: "+err.Error())
 		}
 	}
-	// 读取测试
 	time.Sleep(1 * time.Second)
-	tempText, err = execDDTest(testFilePath+blockFile, "/dev/null", bs, blockCount)
+	tempText, err := execDDTest(testFilePath+blockFile, "/dev/null", bs, blockCount)
 	defer os.Remove(testFilePath + blockFile)
 	if err != nil {
 		loggerInsert(Logger, "execDDTest read error for "+testFilePath+" path: "+err.Error())
 	}
-	// /dev/null 无法访问
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 		loggerInsert(Logger, "读取测试到/dev/null失败，尝试读取到/tmp/read文件: "+tempText)
@@ -295,12 +305,10 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		if err != nil {
 			loggerInsert(Logger, "execDDTest read error for /tmp/ path: "+err.Error())
 		}
-		// 如果/tmp/read也失败，尝试直接读取到当前目录
 		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 			loggerInsert(Logger, "读取测试到/tmp/read文件失败，尝试读取到当前目录: "+tempText)
 			time.Sleep(1 * time.Second)
-			// 使用原始文件名，但添加"read_"前缀，避免与源文件冲突
 			tempText, err = execDDTest(testFilePath+blockFile, testFilePath+"read_"+blockFile, bs, blockCount)
 			defer os.Remove(testFilePath + "read_" + blockFile)
 			if err != nil {
@@ -308,7 +316,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			}
 		}
 	}
-	parsedResult = parseResultDD(tempText, blockCount)
+	parsedResult := parseResultDD(tempText, blockCount)
 	loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
 	result += parsedResult
 	result += "\n"
