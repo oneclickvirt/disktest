@@ -223,34 +223,55 @@ func checkFioIOEngine() string {
 	}
 	embeddedCmd, embeddedPath, err := fio.GetFIO()
 	defer fio.CleanFio(embeddedPath)
-	if err != nil {
+	if err == nil {
+		loggerInsert(Logger, "使用嵌入的fio二进制文件: "+embeddedPath)
+	} else {
 		loggerInsert(Logger, "无法获取嵌入的fio二进制文件: "+err.Error())
 		return "psync"
 	}
 	if embeddedCmd == "" {
 		return "psync"
 	}
-	loggerInsert(Logger, "使用嵌入的fio二进制文件: " + embeddedPath)
 	parts := strings.Split(embeddedCmd, " ")
-	out, err := exec.Command(parts[0], append(parts[1:], "--enghelp")...).CombinedOutput()
-	if err != nil {
-		loggerInsert(Logger, "无法获取fio支持的IO引擎: " + err.Error())
-		return "psync"
+	var tempDir string
+	var tempFile string
+	if runtime.GOOS == "windows" {
+		tempDir = os.Getenv("TEMP")
+		if tempDir == "" {
+			tempDir = os.Getenv("TMP")
+		}
+		if tempDir == "" {
+			tempDir = "C:\\Windows\\Temp"
+		}
+		tempFile = filepath.Join(tempDir, "fio_engine_check")
+	} else {
+		tempDir = "/tmp"
+		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+			tempDir = os.TempDir()
+		}
+		tempFile = filepath.Join(tempDir, "fio_engine_check")
 	}
-	output := string(out)
-	// 平台判断 + 引擎检测（优先级：io_uring > libaio > posixaio > psync）
-	if strings.Contains(output, "io_uring") && runtime.GOOS == "linux" {
-		loggerInsert(Logger, "检测到 io_uring IO引擎（Linux）")
-		return "io_uring"
+	engines := []string{}
+	if runtime.GOOS == "linux" {
+		engines = []string{"io_uring", "libaio", "posixaio"}
+	} else if runtime.GOOS == "darwin" {
+		engines = []string{"posixaio"}
+	} else if runtime.GOOS == "windows" {
+		engines = []string{"windowsaio"}
+	} else {
+		engines = []string{"posixaio"}
 	}
-	if strings.Contains(output, "libaio") && runtime.GOOS == "linux" {
-		loggerInsert(Logger, "检测到 libaio IO引擎（Linux）")
-		return "libaio"
+	for _, engine := range engines {
+		cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine="+engine, "--runtime=1", "--size=1M", "--direct=1", "--filename="+tempFile, "--minimal")...)
+		_, err = cmd.CombinedOutput()
+		defer func(filename string) {
+			os.Remove(filename)
+		}(tempFile)
+		if err == nil {
+			loggerInsert(Logger, engine+" IO引擎可用")
+			return engine
+		}
 	}
-	if strings.Contains(output, "posixaio") && runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		loggerInsert(Logger, "检测到 posixaio IO引擎（类Unix）")
-		return "posixaio"
-	}
-	loggerInsert(Logger, "使用默认 psync IO引擎（兼容性最强）")
+	loggerInsert(Logger, "所有IO引擎都不可用，使用psync")
 	return "psync"
 }
