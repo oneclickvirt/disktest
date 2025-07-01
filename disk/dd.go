@@ -162,7 +162,11 @@ func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
 		return "", fmt.Errorf("execDDTest: ddCmd is NULL")
 	}
 	parts := strings.Split(ddCmd, " ")
-	cmd2 := exec.Command(parts[0], append(parts[1:], "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount, "oflag=direct")...)
+	args := append(parts[1:], "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount)
+	if !strings.Contains(strings.ToLower(ddCmd), "darwin") {
+		args = append(args, "oflag=direct")
+	}
+	cmd2 := exec.Command(parts[0], args...)
 	stderr2, err := cmd2.StderrPipe()
 	if err != nil {
 		loggerInsert(Logger, "failed to get StderrPipe: "+err.Error())

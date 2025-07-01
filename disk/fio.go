@@ -83,6 +83,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		} else {
 			loggerInsert(Logger, "开始单路径FIO测试(/root或/tmp)")
 			var buildPath string
+			var fioSize string
 			rootFioSize := adjustFioTestSize("/root", defaultFioSize)
 			loggerInsert(Logger, "/root路径FIO测试文件大小: "+rootFioSize)
 			tempText, err := buildFioFile("/root", rootFioSize)
@@ -103,6 +104,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				defer os.Remove("/tmp/test.fio")
 				if err == nil {
 					buildPath = "/tmp"
+					fioSize = tmpFioSize
 					if EnableLoger && buildOutput != "" {
 						Logger.Info("在/tmp路径生成FIO测试文件输出: " + buildOutput)
 					}
@@ -111,6 +113,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				}
 			} else {
 				buildPath = "/root"
+				fioSize = rootFioSize
 				if EnableLoger && tempText != "" {
 					Logger.Info("在/root路径生成FIO测试文件输出: " + tempText)
 				}
@@ -118,11 +121,6 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			if buildPath != "" {
 				loggerInsert(Logger, "使用路径进行FIO测试: "+buildPath)
 				time.Sleep(1 * time.Second)
-				fioSize := rootFioSize
-				if buildPath == "/tmp" {
-					tmpFioSize := ""
-					fioSize = tmpFioSize
-				}
 				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
 				if err == nil {
 					result += tempResult
@@ -277,7 +275,41 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		if commandExists("timeout") {
 			args = append(args, "35")
 		}
-		fioArgs := []string{"--name=rand_rw_" + BS, "--ioengine=" + ioEngine, "--rw=randrw", "--rwmixread=50", "--bs=" + BS, "--iodepth=64", "--numjobs=2", "--size=" + fioSize, "--runtime=30", "--gtod_reduce=1", "--direct=1", "--filename=" + path + "/test.fio", "--group_reporting", "--minimal"}
+		var fioArgs []string
+        if runtime.GOOS == "darwin" {
+            fioArgs = []string{
+                "--name=rand_rw_" + BS, 
+                "--ioengine=" + ioEngine, 
+                "--rw=randrw", 
+                "--rwmixread=50", 
+                "--bs=" + BS, 
+                "--iodepth=64",
+                "--numjobs=2",
+                "--size=" + fioSize, 
+                "--runtime=30", 
+                "--direct=0",
+                "--filename=" + path + "/test.fio", 
+                "--group_reporting", 
+                "--minimal",
+            }
+        } else {
+            fioArgs = []string{
+                "--name=rand_rw_" + BS, 
+                "--ioengine=" + ioEngine, 
+                "--rw=randrw", 
+                "--rwmixread=50", 
+                "--bs=" + BS, 
+                "--iodepth=64", 
+                "--numjobs=2", 
+                "--size=" + fioSize, 
+                "--runtime=30", 
+                "--gtod_reduce=1", 
+                "--direct=1", 
+                "--filename=" + path + "/test.fio", 
+                "--group_reporting", 
+                "--minimal",
+            }
+        }
 		if commandExists("timeout") {
 			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
 			output, err := cmd2.Output()

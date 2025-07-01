@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -233,19 +234,21 @@ func checkFioIOEngine() string {
 	if embeddedCmd == "" {
 		return "psync"
 	}
-	// 首先尝试libaio
 	parts := strings.Split(embeddedCmd, " ")
-	cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
-	_, err = cmd.CombinedOutput()
-	defer func() {
-		_ = os.Remove("/tmp/fio_engine_check")
-	}()
-	if err == nil {
-		loggerInsert(Logger, "libaio IO引擎可用")
-		return "libaio"
+	// 首先尝试libaio
+	if runtime.GOOS != "darwin" {
+		cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
+		_, err = cmd.CombinedOutput()
+		defer func() {
+			_ = os.Remove("/tmp/fio_engine_check")
+		}()
+		if err == nil {
+			loggerInsert(Logger, "libaio IO引擎可用")
+			return "libaio"
+		}
 	}
 	// 如果libaio失败，尝试posixaio
-	cmd = exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
+	cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
 	_, err = cmd.CombinedOutput()
 	defer func() {
 		_ = os.Remove("/tmp/fio_engine_check")
