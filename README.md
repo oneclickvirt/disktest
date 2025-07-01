@@ -10,7 +10,7 @@
 
 - [x] 支持使用```winsat```测试
 - [x] 支持使用```dd```测试
-- [x] 支持使用```fio```测试，支持自动选择IO引擎测试，测试优先级为```libaio > posixaio > psync```
+- [x] 支持使用```fio```测试，支持自动选择IO引擎测试，测试优先级为```libaio[仅linux] > posixaio > psync```
 - [x] 支持Go自身静态依赖注入[fio](https://github.com/oneclickvirt/fio)和[dd](https://github.com/oneclickvirt/dd)，使用时无额外环境依赖需求
 - [x] 支持双语输出，以```-l```指定```zh```或```en```可指定输出的语言，未指定时默认使用中文输出
 - [x] 支持指定测试方式，以```-m```指定```dd```或```fio```指定测试方式，未指定时默认使用```fio```进行测试

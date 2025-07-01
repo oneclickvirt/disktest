@@ -221,43 +221,36 @@ func checkFioIOEngine() string {
 		InitLogger()
 		defer Logger.Sync()
 	}
-	// 检查系统是否安装了fio，如果没有则尝试使用嵌入的二进制文件
 	embeddedCmd, embeddedPath, err := fio.GetFIO()
 	defer fio.CleanFio(embeddedPath)
-	if err == nil {
-		loggerInsert(Logger, "使用嵌入的fio二进制文件: "+embeddedPath)
-
-	} else {
+	if err != nil {
 		loggerInsert(Logger, "无法获取嵌入的fio二进制文件: "+err.Error())
 		return "psync"
 	}
 	if embeddedCmd == "" {
 		return "psync"
 	}
+	loggerInsert(Logger, "使用嵌入的fio二进制文件: " + embeddedPath)
 	parts := strings.Split(embeddedCmd, " ")
-	// 首先尝试libaio
-	if runtime.GOOS != "darwin" {
-		cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=libaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
-		_, err = cmd.CombinedOutput()
-		defer func() {
-			_ = os.Remove("/tmp/fio_engine_check")
-		}()
-		if err == nil {
-			loggerInsert(Logger, "libaio IO引擎可用")
-			return "libaio"
-		}
+	out, err := exec.Command(parts[0], append(parts[1:], "--enghelp")...).CombinedOutput()
+	if err != nil {
+		loggerInsert(Logger, "无法获取fio支持的IO引擎: " + err.Error())
+		return "psync"
 	}
-	// 如果libaio失败，尝试posixaio
-	cmd := exec.Command(parts[0], append(parts[1:], "--name=check", "--ioengine=posixaio", "--runtime=1", "--size=1M", "--direct=1", "--filename=/tmp/fio_engine_check", "--minimal")...)
-	_, err = cmd.CombinedOutput()
-	defer func() {
-		_ = os.Remove("/tmp/fio_engine_check")
-	}()
-	if err == nil {
-		loggerInsert(Logger, "posixaio IO引擎可用")
+	output := string(out)
+	// 平台判断 + 引擎检测（优先级：io_uring > libaio > posixaio > psync）
+	if strings.Contains(output, "io_uring") && runtime.GOOS == "linux" {
+		loggerInsert(Logger, "检测到 io_uring IO引擎（Linux）")
+		return "io_uring"
+	}
+	if strings.Contains(output, "libaio") && runtime.GOOS == "linux" {
+		loggerInsert(Logger, "检测到 libaio IO引擎（Linux）")
+		return "libaio"
+	}
+	if strings.Contains(output, "posixaio") && runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+		loggerInsert(Logger, "检测到 posixaio IO引擎（类Unix）")
 		return "posixaio"
 	}
-	// 如果都失败了，返回默认的psync引擎
-	loggerInsert(Logger, "libaio和posixaio都不可用，使用psync")
+	loggerInsert(Logger, "使用默认 psync IO引擎（兼容性最强）")
 	return "psync"
 }
