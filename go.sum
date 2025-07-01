@@ -6,8 +6,8 @@ github.com/oneclickvirt/dd v0.0.2-20250701030820 h1:qezfANX8XbM9XodfF2/AikpsUfeO
 github.com/oneclickvirt/dd v0.0.2-20250701030820/go.mod h1:tImu9sPTkLWo2tf1dEN1xQzrylWKauj9hbU8PHfyAeU=
 github.com/oneclickvirt/defaultset v0.0.2-20240624082446 h1:5Pg3mK/u/vQvSz7anu0nxzrNdELi/AcDAU1mMsmPzyc=
 github.com/oneclickvirt/defaultset v0.0.2-20240624082446/go.mod h1:e9Jt4tf2sbemCtc84/XgKcHy9EZ2jkc5x2sW1NiJS+E=
-github.com/oneclickvirt/fio v0.0.1-20250406060851 h1:b7xHKpPmU4q0NmvigRCEr3tQuAV/83ZIAGtHycLegw8=
-github.com/oneclickvirt/fio v0.0.1-20250406060851/go.mod h1:NIq+XYTey68KNERGIy/oRDlzpwLzBVoHOCiqX8didsE=
+github.com/oneclickvirt/fio v0.0.2-20250701074629 h1:n74OY099F/3zMnO4gOZh2BDUQaYSSuuzyEVj0lXFz+k=
+github.com/oneclickvirt/fio v0.0.2-20250701074629/go.mod h1:NIq+XYTey68KNERGIy/oRDlzpwLzBVoHOCiqX8didsE=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/shirou/gopsutil v3.21.11+incompatible h1:+1+c1VGhc88SSonWP6foOcLhvnKlUeu/erjjvaPEYiI=
