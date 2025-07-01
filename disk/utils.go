@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"filepath"
+	"path/filepath" 
 
 	. "github.com/oneclickvirt/defaultset"
 	"github.com/oneclickvirt/fio"
