@@ -16,31 +16,21 @@ import (
 
 // DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string, enableMultiCheck bool, testPath string) string {
-	var (
-		result      string
-		devices     []string
-		mountPoints []string
-	)
-	parts, err := disk.Partitions(false)
+	var result string
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
 		Logger.Info("开始DD测试硬盘IO")
-		for _, part := range parts {
-			Logger.Info("分区路径: " + part.Mountpoint + ", 设备: " + part.Device)
-		}
 	}
-	if err == nil {
-		for _, f := range parts {
-			if !strings.Contains(f.Device, "vda") && !strings.Contains(f.Device, "snap") && !strings.Contains(f.Device, "loop") {
-				if isWritableMountpoint(f.Mountpoint) {
-					devices = append(devices, f.Device)
-					mountPoints = append(mountPoints, f.Mountpoint)
-					loggerInsert(Logger, "添加可写分区: "+f.Mountpoint+", 设备: "+f.Device)
-				}
-			}
+	pathInfo, err := getTestPaths()
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("DDTest err: " + err.Error())
 		}
+		return ""
 	}
+	devices := pathInfo.Devices
+	mountPoints := pathInfo.MountPoints
 	if language == "en" {
 		result += "Test Path     Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
 	} else {

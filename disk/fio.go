@@ -22,29 +22,16 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		defer Logger.Sync()
 		Logger.Info("开始FIO测试硬盘")
 	}
-	var (
-		result      string
-		devices     []string
-		mountPoints []string
-	)
-	parts, err := disk.Partitions(false)
-	if EnableLoger {
-		Logger.Info("识别到的磁盘分区:")
-		for _, part := range parts {
-			Logger.Info("路径: " + part.Mountpoint + ", 设备: " + part.Device)
+	var result string
+	pathInfo, err := getTestPaths()
+	if err != nil {
+		if EnableLoger {
+			Logger.Info("FioTest err: " + err.Error())
 		}
+		return ""
 	}
-	if err == nil {
-		for _, f := range parts {
-			if !strings.Contains(f.Device, "vda") && !strings.Contains(f.Device, "snap") && !strings.Contains(f.Device, "loop") {
-				if isWritableMountpoint(f.Mountpoint) {
-					devices = append(devices, f.Device)
-					mountPoints = append(mountPoints, f.Mountpoint)
-					loggerInsert(Logger, "添加可写分区: "+f.Mountpoint+", 设备: "+f.Device)
-				}
-			}
-		}
-	}
+	devices := pathInfo.Devices
+	mountPoints := pathInfo.MountPoints
 	if language == "en" {
 		result += "Test Path     Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
 	} else {
@@ -276,40 +263,40 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 			args = append(args, "35")
 		}
 		var fioArgs []string
-        if runtime.GOOS == "darwin" {
-            fioArgs = []string{
-                "--name=rand_rw_" + BS, 
-                "--ioengine=" + ioEngine, 
-                "--rw=randrw", 
-                "--rwmixread=50", 
-                "--bs=" + BS, 
-                "--iodepth=64",
-                "--numjobs=2",
-                "--size=" + fioSize, 
-                "--runtime=30", 
-                "--direct=0",
-                "--filename=" + path + "/test.fio", 
-                "--group_reporting", 
-                "--minimal",
-            }
-        } else {
-            fioArgs = []string{
-                "--name=rand_rw_" + BS, 
-                "--ioengine=" + ioEngine, 
-                "--rw=randrw", 
-                "--rwmixread=50", 
-                "--bs=" + BS, 
-                "--iodepth=64", 
-                "--numjobs=2", 
-                "--size=" + fioSize, 
-                "--runtime=30", 
-                "--gtod_reduce=1", 
-                "--direct=1", 
-                "--filename=" + path + "/test.fio", 
-                "--group_reporting", 
-                "--minimal",
-            }
-        }
+		if runtime.GOOS == "darwin" {
+			fioArgs = []string{
+				"--name=rand_rw_" + BS,
+				"--ioengine=" + ioEngine,
+				"--rw=randrw",
+				"--rwmixread=50",
+				"--bs=" + BS,
+				"--iodepth=64",
+				"--numjobs=2",
+				"--size=" + fioSize,
+				"--runtime=30",
+				"--direct=0",
+				"--filename=" + path + "/test.fio",
+				"--group_reporting",
+				"--minimal",
+			}
+		} else {
+			fioArgs = []string{
+				"--name=rand_rw_" + BS,
+				"--ioengine=" + ioEngine,
+				"--rw=randrw",
+				"--rwmixread=50",
+				"--bs=" + BS,
+				"--iodepth=64",
+				"--numjobs=2",
+				"--size=" + fioSize,
+				"--runtime=30",
+				"--gtod_reduce=1",
+				"--direct=1",
+				"--filename=" + path + "/test.fio",
+				"--group_reporting",
+				"--minimal",
+			}
+		}
 		if commandExists("timeout") {
 			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
 			output, err := cmd2.Output()
