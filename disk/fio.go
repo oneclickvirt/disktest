@@ -115,6 +115,39 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 					Logger.Info("执行FIO测试失败: " + err.Error())
 				}
 			}
+			// 检查是否有大于210GB的路径需要额外测试
+			for index, path := range mountPoints {
+				if path == "/root" || path == "/tmp" {
+					continue // 跳过已经测试过的默认路径
+				}
+				usage, err := disk.Usage(path)
+				if err != nil {
+					loggerInsert(Logger, "获取路径"+path+"磁盘使用情况失败: "+err.Error())
+					continue
+				}
+				// 检查可用空间是否大于210GB (210 * 1024 * 1024 * 1024 bytes) (这是启用额外检测的条件)
+				if usage.Free > uint64(210*1024*1024*1024) {
+					loggerInsert(Logger, "检测到大容量路径: "+path+", 可用空间: "+fmt.Sprintf("%.2fGB", float64(usage.Free)/(1024*1024*1024))+", 进行额外FIO测试")
+					fioSize := adjustFioTestSize(path, defaultFioSize)
+					loggerInsert(Logger, "大容量路径FIO测试文件大小: "+fioSize)
+					buildOutput, err := buildFioFile(path, fioSize)
+					defer os.Remove(path + "/test.fio")
+					if err == nil {
+						if buildOutput != "" {
+							loggerInsert(Logger, "生成大容量路径FIO测试文件输出: "+buildOutput)
+						}
+						time.Sleep(1 * time.Second)
+						tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
+						if err == nil {
+							result += tempResult
+						} else {
+							loggerInsert(Logger, "执行大容量路径FIO测试失败: "+err.Error())
+						}
+					} else {
+						loggerInsert(Logger, "生成大容量路径FIO测试文件失败: "+err.Error())
+					}
+				}
+			}
 		}
 	} else {
 		loggerInsert(Logger, "测试指定路径: "+testPath)

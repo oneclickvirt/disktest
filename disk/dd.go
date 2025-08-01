@@ -72,6 +72,24 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			} else {
 				loggerInsert(Logger, "开始单路径测试(/root或/tmp)")
 				result += ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+
+				// 检查是否有大于210GB的路径需要额外测试
+				for index, path := range mountPoints {
+					if path == "/root" || path == "/tmp" {
+						continue // 跳过已经测试过的默认路径
+					}
+					usage, err := disk.Usage(path)
+					if err != nil {
+						loggerInsert(Logger, "获取路径"+path+"磁盘使用情况失败: "+err.Error())
+						continue
+					}
+					// 检查可用空间是否大于210GB (210 * 1024 * 1024 * 1024 bytes) (这是启用额外检测的条件)
+					if usage.Free > uint64(210*1024*1024*1024) {
+						loggerInsert(Logger, "检测到大容量路径: "+path+", 可用空间: "+fmt.Sprintf("%.2fGB", float64(usage.Free)/(1024*1024*1024))+", 进行额外测试")
+						adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
+						result += ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+					}
+				}
 			}
 		} else {
 			loggerInsert(Logger, "测试指定路径: "+testPath)
