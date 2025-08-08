@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -14,6 +15,31 @@ import (
 	"github.com/oneclickvirt/fio"
 	"github.com/shirou/gopsutil/disk"
 )
+
+// getDefaultTestPaths 获取系统默认的测试路径
+func getDefaultTestPaths() (string, string) {
+	var rootPath, tmpPath string
+	if runtime.GOOS == "windows" {
+		userProfile := os.Getenv("USERPROFILE")
+		if userProfile == "" {
+			userProfile = "C:\\Users\\Default"
+		}
+		rootPath = userProfile
+		tmpPath = os.TempDir()
+	} else {
+		rootPath = "/root"
+		tmpPath = "/tmp"
+	}
+	return rootPath, tmpPath
+}
+
+// ensurePathExists 确保路径存在，如果不存在则创建
+func ensurePathExists(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return os.MkdirAll(path, 0755)
+	}
+	return nil
+}
 
 // FioTest 通过fio测试硬盘
 func FioTest(language string, enableMultiCheck bool, testPath string) string {
@@ -48,10 +74,15 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			loggerInsert(Logger, "开始多路径FIO测试")
 			for index, path := range mountPoints {
 				loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
+				// 确保路径存在
+				if err := ensurePathExists(path); err != nil {
+					loggerInsert(Logger, "创建路径失败: "+path+", 错误: "+err.Error())
+					continue
+				}
 				fioSize := adjustFioTestSize(path, defaultFioSize)
 				loggerInsert(Logger, "FIO测试文件大小: "+fioSize)
 				buildOutput, err := buildFioFile(path, fioSize)
-				defer os.Remove(path + "/test.fio")
+				defer os.Remove(filepath.Join(path, "test.fio"))
 				if err == nil {
 					if buildOutput != "" {
 						loggerInsert(Logger, "生成FIO测试文件输出: "+buildOutput)
@@ -68,16 +99,20 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				}
 			}
 		} else {
-			loggerInsert(Logger, "开始单路径FIO测试(/root或/tmp)")
+			loggerInsert(Logger, "开始单路径FIO测试")
 			var buildPath string
 			var fioSize string
-			rootFioSize := adjustFioTestSize("/root", defaultFioSize)
-			loggerInsert(Logger, "/root路径FIO测试文件大小: "+rootFioSize)
-			tempText, err := buildFioFile("/root", rootFioSize)
-			defer os.Remove("/root/test.fio")
-			if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
+			rootPath, tmpPath := getDefaultTestPaths()
+			if err := ensurePathExists(rootPath); err != nil {
+				loggerInsert(Logger, "创建根路径失败: "+rootPath+", 错误: "+err.Error())
+			}
+			rootFioSize := adjustFioTestSize(rootPath, defaultFioSize)
+			loggerInsert(Logger, rootPath+"路径FIO测试文件大小: "+rootFioSize)
+			tempText, err := buildFioFile(rootPath, rootFioSize)
+			defer os.Remove(filepath.Join(rootPath, "test.fio"))
+			if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") || strings.Contains(tempText, "No such file or directory") {
 				if EnableLoger {
-					Logger.Info("在/root路径生成FIO测试文件失败，尝试/tmp路径")
+					Logger.Info("在" + rootPath + "路径生成FIO测试文件失败，尝试" + tmpPath + "路径")
 					if err != nil {
 						Logger.Info("错误: " + err.Error())
 					}
@@ -85,24 +120,27 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 						Logger.Info("输出: " + tempText)
 					}
 				}
-				tmpFioSize := adjustFioTestSize("/tmp", defaultFioSize)
-				loggerInsert(Logger, "/tmp路径FIO测试文件大小: "+tmpFioSize)
-				buildOutput, err := buildFioFile("/tmp", tmpFioSize)
-				defer os.Remove("/tmp/test.fio")
+				if err := ensurePathExists(tmpPath); err != nil {
+					loggerInsert(Logger, "创建临时路径失败: "+tmpPath+", 错误: "+err.Error())
+				}
+				tmpFioSize := adjustFioTestSize(tmpPath, defaultFioSize)
+				loggerInsert(Logger, tmpPath+"路径FIO测试文件大小: "+tmpFioSize)
+				buildOutput, err := buildFioFile(tmpPath, tmpFioSize)
+				defer os.Remove(filepath.Join(tmpPath, "test.fio"))
 				if err == nil {
-					buildPath = "/tmp"
+					buildPath = tmpPath
 					fioSize = tmpFioSize
 					if EnableLoger && buildOutput != "" {
-						Logger.Info("在/tmp路径生成FIO测试文件输出: " + buildOutput)
+						Logger.Info("在" + tmpPath + "路径生成FIO测试文件输出: " + buildOutput)
 					}
 				} else if EnableLoger {
-					Logger.Info("在/tmp路径生成FIO测试文件失败: " + err.Error())
+					Logger.Info("在" + tmpPath + "路径生成FIO测试文件失败: " + err.Error())
 				}
 			} else {
-				buildPath = "/root"
+				buildPath = rootPath
 				fioSize = rootFioSize
 				if EnableLoger && tempText != "" {
-					Logger.Info("在/root路径生成FIO测试文件输出: " + tempText)
+					Logger.Info("在" + rootPath + "路径生成FIO测试文件输出: " + tempText)
 				}
 			}
 			if buildPath != "" {
@@ -117,7 +155,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			}
 			// 检查是否有大于210GB的路径需要额外测试
 			for index, path := range mountPoints {
-				if path == "/root" || path == "/tmp" {
+				if path == rootPath || path == tmpPath {
 					continue // 跳过已经测试过的默认路径
 				}
 				usage, err := disk.Usage(path)
@@ -128,10 +166,15 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				// 检查可用空间是否大于210GB (210 * 1024 * 1024 * 1024 bytes) (这是启用额外检测的条件)
 				if usage.Free > uint64(210*1024*1024*1024) {
 					loggerInsert(Logger, "检测到大容量路径: "+path+", 可用空间: "+fmt.Sprintf("%.2fGB", float64(usage.Free)/(1024*1024*1024))+", 进行额外FIO测试")
+					// 确保路径存在
+					if err := ensurePathExists(path); err != nil {
+						loggerInsert(Logger, "创建大容量路径失败: "+path+", 错误: "+err.Error())
+						continue
+					}
 					fioSize := adjustFioTestSize(path, defaultFioSize)
 					loggerInsert(Logger, "大容量路径FIO测试文件大小: "+fioSize)
 					buildOutput, err := buildFioFile(path, fioSize)
-					defer os.Remove(path + "/test.fio")
+					defer os.Remove(filepath.Join(path, "test.fio"))
 					if err == nil {
 						if buildOutput != "" {
 							loggerInsert(Logger, "生成大容量路径FIO测试文件输出: "+buildOutput)
@@ -151,11 +194,15 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		}
 	} else {
 		loggerInsert(Logger, "测试指定路径: "+testPath)
+		if err := ensurePathExists(testPath); err != nil {
+			loggerInsert(Logger, "创建指定路径失败: "+testPath+", 错误: "+err.Error())
+			return "创建测试路径失败: " + err.Error()
+		}
 		fioSize := adjustFioTestSize(testPath, defaultFioSize)
 		loggerInsert(Logger, "指定路径FIO测试文件大小: "+fioSize)
 		tempText, err := buildFioFile(testPath, fioSize)
-		defer os.Remove(testPath + "/test.fio")
-		if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") {
+		defer os.Remove(filepath.Join(testPath, "test.fio"))
+		if err != nil || strings.Contains(tempText, "failed") || strings.Contains(tempText, "Permission denied") || strings.Contains(tempText, "No such file or directory") {
 			if EnableLoger {
 				Logger.Info("在指定路径生成FIO测试文件失败")
 				if err != nil {
@@ -243,7 +290,8 @@ func buildFioFile(path, fioSize string) (string, error) {
 		loggerInsert(Logger, "fio不可用: "+err.Error())
 	}
 	args = strings.Split(embeddedCmd, " ")
-	args = append(args, "--name=setup", "--ioengine="+checkFioIOEngine(), "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1", "--filename="+path+"/test.fio", "--direct=1", "--minimal")
+	testFilePath := filepath.Join(path, "test.fio")
+	args = append(args, "--name=setup", "--ioengine="+checkFioIOEngine(), "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1", "--filename="+testFilePath, "--direct=1", "--minimal")
 	cmd1 := exec.Command(args[0], args[1:]...)
 	stderr1, err := cmd1.StderrPipe()
 	if err != nil {
@@ -286,17 +334,16 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		loggerInsert(Logger, "fio不可用: "+err.Error())
 	}
 	baseArgs = strings.Split(embeddedCmd, " ")
-	// 测试
+	testFilePath := filepath.Join(path, "test.fio")
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
 	for _, BS := range blockSizes {
 		loggerInsert(Logger, "开始测试块大小: "+BS)
-		// 构建命令参数
 		var args []string
 		if commandExists("timeout") {
 			args = append(args, "35")
 		}
 		var fioArgs []string
-		if runtime.GOOS == "darwin" {
+		if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 			fioArgs = []string{
 				"--name=rand_rw_" + BS,
 				"--ioengine=" + ioEngine,
@@ -308,7 +355,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 				"--size=" + fioSize,
 				"--runtime=30",
 				"--direct=0",
-				"--filename=" + path + "/test.fio",
+				"--filename=" + testFilePath,
 				"--group_reporting",
 				"--minimal",
 			}
@@ -325,12 +372,12 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 				"--runtime=30",
 				"--gtod_reduce=1",
 				"--direct=1",
-				"--filename=" + path + "/test.fio",
+				"--filename=" + testFilePath,
 				"--group_reporting",
 				"--minimal",
 			}
 		}
-		if commandExists("timeout") {
+		if commandExists("timeout") && runtime.GOOS != "windows" {
 			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
 			output, err := cmd2.Output()
 			if err != nil {
