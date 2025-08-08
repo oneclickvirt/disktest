@@ -17,6 +17,7 @@ import (
 )
 
 // generateFioTestHeader 生成FIO测试的表头
+// generateFioTestHeader 生成FIO测试的表头
 func generateFioTestHeader(language string, devices []string) string {
 	// 计算所有设备名称中的最大宽度
 	maxDeviceWidth := 10 // 默认最小宽度
@@ -28,9 +29,19 @@ func generateFioTestHeader(language string, devices []string) string {
 	}
 	var header string
 	if language == "en" {
-		header = fmt.Sprintf("%-*s", maxDeviceWidth, "Test Path") + "    Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
+		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n", 
+			maxDeviceWidth, "Test Path", 
+			"Block", 
+			"Read(IOPS)", 
+			"Write(IOPS)", 
+			"Total(IOPS)")
 	} else {
-		header = fmt.Sprintf("%-*s", maxDeviceWidth, "测试路径") + "      块大小   读测试(IOPS)            写测试(IOPS)            总和(IOPS)\n"
+		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n", 
+			maxDeviceWidth, "测试路径", 
+			"块大小", 
+			"读测试(IOPS)", 
+			"写测试(IOPS)", 
+			"总和(IOPS)")
 	}
 	return header
 }

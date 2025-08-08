@@ -28,9 +28,17 @@ func generateDDTestHeader(language string, devices []string) string {
 	}
 	var header string
 	if language == "en" {
-		header = fmt.Sprintf("%-*s", maxDeviceWidth, "Test Path") + fmt.Sprintf("    %-15s    %-30s    %-30s\n", "Block Size", "Direct Write(IOPS)", "Direct Read(IOPS)")
+		header = fmt.Sprintf("%-*s    %-15s    %-30s    %-30s\n",
+			maxDeviceWidth, "Test Path",
+			"Block Size",
+			"Direct Write(IOPS)",
+			"Direct Read(IOPS)")
 	} else {
-		header = fmt.Sprintf("%-*s", maxDeviceWidth, "测试路径") + fmt.Sprintf("    %-15s    %-30s    %-30s\n", "块大小", "直接写入(IOPS)", "直接读取(IOPS)")
+		header = fmt.Sprintf("%-*s    %-15s    %-30s    %-30s\n",
+			maxDeviceWidth, "测试路径",
+			"块大小",
+			"直接写入(IOPS)",
+			"直接读取(IOPS)")
 	}
 	return header
 }
