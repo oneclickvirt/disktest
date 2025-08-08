@@ -451,13 +451,13 @@ func processFioOutput(tempText, BS, devicename string) string {
 				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
 				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
 			deviceWidth := getDeviceColumnWidth(devicename)
-			// 拼接输出文本
-			result += fmt.Sprintf("%-*s", deviceWidth, devicename) + "    "
-			result += fmt.Sprintf("%-5s", BS) + "    "
-			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
-			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
-			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
-			result += "\n"
+			// 拼接输出文本 - 修复对齐问题
+			result += fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
+				deviceWidth, devicename,
+				BS,
+				formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")",
+				formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")",
+				formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")")
 		}
 	}
 	return result
