@@ -16,6 +16,25 @@ import (
 	"github.com/shirou/gopsutil/disk"
 )
 
+// generateFioTestHeader 生成FIO测试的表头
+func generateFioTestHeader(language string, devices []string) string {
+	// 计算所有设备名称中的最大宽度
+	maxDeviceWidth := 10 // 默认最小宽度
+	for _, device := range devices {
+		deviceWidth := getDeviceColumnWidth(device)
+		if deviceWidth > maxDeviceWidth {
+			maxDeviceWidth = deviceWidth
+		}
+	}
+	var header string
+	if language == "en" {
+		header = fmt.Sprintf("%-*s", maxDeviceWidth, "Test Path") + "    Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
+	} else {
+		header = fmt.Sprintf("%-*s", maxDeviceWidth, "测试路径") + "      块大小   读测试(IOPS)            写测试(IOPS)            总和(IOPS)\n"
+	}
+	return header
+}
+
 // getDefaultTestPaths 获取系统默认的测试路径
 func getDefaultTestPaths() (string, string) {
 	var rootPath, tmpPath string
@@ -58,11 +77,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
-	if language == "en" {
-		result += "Test Path     Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
-	} else {
-		result += "测试路径      块大小   读测试(IOPS)            写测试(IOPS)            总和(IOPS)\n"
-	}
+	result += generateFioTestHeader(language, devices)
 	var defaultFioSize string
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
 		defaultFioSize = "512M"
@@ -402,6 +417,15 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	return result, nil
 }
 
+// getDeviceColumnWidth 计算设备名称列的动态宽度
+func getDeviceColumnWidth(devicename string) int {
+	deviceWidth := len(devicename) + 2
+	if deviceWidth < 10 {
+		deviceWidth = 10
+	}
+	return deviceWidth
+}
+
 // processFioOutput 处理fio输出结果
 func processFioOutput(tempText, BS, devicename string) string {
 	var result string
@@ -426,8 +450,9 @@ func processFioOutput(tempText, BS, devicename string) string {
 			loggerInsert(Logger, "块大小: "+BS+", 读取IOPS: "+DISK_IOPS_R+", 写入IOPS: "+DISK_IOPS_W+
 				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
 				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
+			deviceWidth := getDeviceColumnWidth(devicename)
 			// 拼接输出文本
-			result += fmt.Sprintf("%-10s", devicename) + "    "
+			result += fmt.Sprintf("%-*s", deviceWidth, devicename) + "    "
 			result += fmt.Sprintf("%-5s", BS) + "    "
 			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
 			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "

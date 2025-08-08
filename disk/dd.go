@@ -16,6 +16,25 @@ import (
 	"github.com/shirou/gopsutil/disk"
 )
 
+// generateDDTestHeader 生成DD测试的表头
+func generateDDTestHeader(language string, devices []string) string {
+	// 计算所有设备名称中的最大宽度
+	maxDeviceWidth := 10 // 默认最小宽度
+	for _, device := range devices {
+		deviceWidth := getDeviceColumnWidth(device)
+		if deviceWidth > maxDeviceWidth {
+			maxDeviceWidth = deviceWidth
+		}
+	}
+	var header string
+	if language == "en" {
+		header = fmt.Sprintf("%-*s", maxDeviceWidth, "Test Path") + "    Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
+	} else {
+		header = fmt.Sprintf("%-*s", maxDeviceWidth, "测试路径") + "      块大小             直接写入(IOPS)                    直接读取(IOPS)\n"
+	}
+	return header
+}
+
 // DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	var result string
@@ -33,11 +52,7 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
-	if language == "en" {
-		result += "Test Path     Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
-	} else {
-		result += "测试路径      块大小             直接写入(IOPS)                    直接读取(IOPS)\n"
-	}
+	result += generateDDTestHeader(language, devices)
 	var targetPath string
 	if testPath == "" {
 		if enableMultiCheck {
@@ -262,7 +277,10 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	if err != nil {
 		loggerInsert(Logger, "Write test error: "+err.Error())
 	} else {
-		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		// 动态计算第一列宽度
+		deviceWidth := getDeviceColumnWidth(strings.TrimSpace(deviceName))
+
+		result += fmt.Sprintf("%-*s", deviceWidth, strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
 		result += parsedResult
@@ -313,7 +331,8 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	rootPath, tmpPath := getDefaultTestPaths()
 	if runtime.GOOS == "darwin" {
 		testFilePath = tmpPath
-		result += fmt.Sprintf("%-10s", tmpPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		deviceWidth := getDeviceColumnWidth(tmpPath)
+		result += fmt.Sprintf("%-*s", deviceWidth, tmpPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		fullBlockFile := filepath.Join(tmpPath, blockFile)
 		writeSource := getDevZeroPath()
 		tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
@@ -369,10 +388,12 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				loggerInsert(Logger, "execDDTest error for "+tmpPath+" path: "+err.Error())
 			}
 			testFilePath = tmpPath
-			result += fmt.Sprintf("%-10s", tmpPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+			deviceWidth := getDeviceColumnWidth(tmpPath)
+			result += fmt.Sprintf("%-*s", deviceWidth, tmpPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		} else {
 			testFilePath = rootPath
-			result += fmt.Sprintf("%-10s", rootPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+			deviceWidth := getDeviceColumnWidth(rootPath)
+			result += fmt.Sprintf("%-*s", deviceWidth, rootPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
 		}
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "写入测试路径: "+testFilePath)
