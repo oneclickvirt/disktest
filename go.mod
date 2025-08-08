@@ -3,7 +3,7 @@ module github.com/oneclickvirt/disktest
 go 1.24.5
 
 require (
-	github.com/oneclickvirt/dd v0.0.2-20250701085922
+	github.com/oneclickvirt/dd v0.0.2-20250808060355
 	github.com/oneclickvirt/defaultset v0.0.2-20240624082446
 	github.com/oneclickvirt/fio v0.0.2-20250808045755
 	github.com/shirou/gopsutil v3.21.11+incompatible

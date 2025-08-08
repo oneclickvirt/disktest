@@ -58,28 +58,24 @@ func main() {
 	} else if testPath != "" {
 		testPath = strings.TrimSpace(strings.ToLower(testPath))
 	}
-	if runtime.GOOS == "windows" {
-		if testMethod != "winsat" && testMethod != "" && testMethod != "fio" {
-			res = "Detected host is Windows, using Winsat for testing.\n"
-			res = disk.WinsatTest(language, isMultiCheck, testPath)
-		} else {
-			res = disk.FioTest(language, isMultiCheck, testPath)
+	switch testMethod {
+	case "fio":
+		res = disk.FioTest(language, isMultiCheck, testPath)
+		if res == "" {
+			res = "Fio test failed, switching to DD for testing.\n"
+			res += disk.DDTest(language, isMultiCheck, testPath)
 		}
-	} else {
-		switch testMethod {
-		case "fio":
-			res = disk.FioTest(language, isMultiCheck, testPath)
-			if res == "" {
-				res = "Fio test failed, switching to DD for testing.\n"
-				res += disk.DDTest(language, isMultiCheck, testPath)
-			}
-		case "dd":
-			res = disk.DDTest(language, isMultiCheck, testPath)
-			if res == "" {
-				res = "DD test failed, switching to Fio for testing.\n"
-				res += disk.FioTest(language, isMultiCheck, testPath)
-			}
-		default:
+	case "dd":
+		res = disk.DDTest(language, isMultiCheck, testPath)
+		if res == "" {
+			res = "DD test failed, switching to Fio for testing.\n"
+			res += disk.FioTest(language, isMultiCheck, testPath)
+		}
+	default:
+		if runtime.GOOS == "windows" {
+			res = "Detected host is Windows, using Winsat for testing.\n"
+			res += disk.WinsatTest(language, isMultiCheck, testPath)
+		} else {
 			res = "Unsupported test method specified.\n"
 		}
 	}
