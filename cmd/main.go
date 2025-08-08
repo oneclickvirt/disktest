@@ -59,10 +59,12 @@ func main() {
 		testPath = strings.TrimSpace(strings.ToLower(testPath))
 	}
 	if runtime.GOOS == "windows" {
-		if testMethod != "winsat" && testMethod != "" {
+		if testMethod != "winsat" && testMethod != "" && testMethod != "fio" {
 			res = "Detected host is Windows, using Winsat for testing.\n"
+			res = disk.WinsatTest(language, isMultiCheck, testPath)
+		} else {
+			res = disk.FioTest(language, isMultiCheck, testPath)
 		}
-		res = disk.WinsatTest(language, isMultiCheck, testPath)
 	} else {
 		switch testMethod {
 		case "fio":
