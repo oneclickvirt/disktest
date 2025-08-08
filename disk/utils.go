@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	. "github.com/oneclickvirt/defaultset"
 	"github.com/oneclickvirt/fio"
 	"go.uber.org/zap"
@@ -280,9 +281,9 @@ func checkFioIOEngine() string {
 
 // getMountPointColumnWidth 计算名称列的动态宽度
 func getMountPointColumnWidth(name string) int {
-	width := len(name) + 2
-	if width < 10 {
-		width = 10
+	width := runewidth.StringWidth(name) // 按实际显示宽度计算
+	if width < 5 {
+		width = 5
 	}
 	return width
 }

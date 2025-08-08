@@ -25,7 +25,6 @@ func generateDDTestHeader(language string, actualTestPaths []string) string {
 			mountPointsWidth = pathWidth
 		}
 	}
-	mountPointsWidth += 2
 	var header string
 	if language == "en" {
 		header = fmt.Sprintf("%-*s    %-15s    %-30s    %-30s\n",
@@ -44,11 +43,9 @@ func generateDDTestHeader(language string, actualTestPaths []string) string {
 }
 
 // DDTest 通过 dd 命令测试硬盘IO
-
-// DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	var result string
-	var actualResults []string // 存储实际测试结果
+	var actualResults []string
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
@@ -99,13 +96,11 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		targetPath = testPath
 		actualTestPaths = []string{testPath}
 	}
-
 	blockNames := []string{"100MB-4K Block", "1GB-1M Block"}
 	blockCounts := []string{"25600", "1000"}
 	blockSizes := []string{"4k", "1M"}
 	blockFiles := []string{"100MB.test", "1GB.test"}
 	if targetPath != "" {
-		// 确保目标路径存在
 		if err := ensurePathExists(targetPath); err != nil {
 			loggerInsert(Logger, "创建目标路径失败: "+targetPath+", 错误: "+err.Error())
 		}
@@ -158,7 +153,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			}
 		} else {
 			loggerInsert(Logger, "测试指定路径: "+testPath)
-			// 确保指定路径存在
 			if err := ensurePathExists(testPath); err != nil {
 				loggerInsert(Logger, "创建指定路径失败: "+testPath+", 错误: "+err.Error())
 				return "创建测试路径失败: " + err.Error()
@@ -167,7 +161,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			actualResults = append(actualResults, tempResult)
 		}
 	}
-
 	// 生成表头并拼接结果
 	if len(actualResults) > 0 {
 		// 从实际结果中提取路径名称来计算表头宽度
@@ -200,7 +193,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			result += resultBlock
 		}
 	}
-
 	return result
 }
 
@@ -366,7 +358,6 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	}
 	tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
 	defer os.Remove(fullBlockFile)
-	// 动态计算第一列宽度
 	deviceWidth := getMountPointColumnWidth(strings.TrimSpace(deviceName))
 	result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, strings.TrimSpace(deviceName), blockName)
 	if err != nil {

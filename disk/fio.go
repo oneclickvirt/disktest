@@ -25,7 +25,6 @@ func generateFioTestHeader(language string, actualTestPaths []string) string {
 			mountPointsWidth = pathWidth
 		}
 	}
-	mountPointsWidth += 2
 	var header string
 	if language == "en" {
 		header = fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
@@ -93,13 +92,11 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	} else {
 		actualTestPaths = []string{testPath}
 	}
-
 	if testPath == "" {
 		if enableMultiCheck {
 			loggerInsert(Logger, "开始多路径FIO测试")
 			for index, path := range mountPoints {
 				loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
-				// 确保路径存在
 				if err := ensurePathExists(path); err != nil {
 					loggerInsert(Logger, "创建路径失败: "+path+", 错误: "+err.Error())
 					continue
@@ -250,19 +247,15 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			Logger.Info("执行FIO测试失败: " + err.Error())
 		}
 	}
-	// 生成表头并拼接结果
 	if len(actualResults) > 0 {
-		// 从实际结果中提取路径名称来计算表头宽度
 		var actualTestPaths []string
 		for _, resultBlock := range actualResults {
 			lines := strings.Split(resultBlock, "\n")
 			for _, line := range lines {
 				if strings.TrimSpace(line) != "" {
-					// 从结果行中提取路径名称（第一列）
 					fields := strings.Fields(line)
 					if len(fields) > 0 {
 						pathName := fields[0]
-						// 检查是否已存在
 						found := false
 						for _, existingPath := range actualTestPaths {
 							if existingPath == pathName {

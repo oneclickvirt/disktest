@@ -3,6 +3,7 @@ module github.com/oneclickvirt/disktest
 go 1.24.5
 
 require (
+	github.com/mattn/go-runewidth v0.0.16
 	github.com/oneclickvirt/dd v0.0.2-20250808062818
 	github.com/oneclickvirt/defaultset v0.0.2-20240624082446
 	github.com/oneclickvirt/fio v0.0.2-20250808045755
@@ -12,6 +13,7 @@ require (
 
 require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
