@@ -110,7 +110,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 						loggerInsert(Logger, "生成FIO测试文件输出: "+buildOutput)
 					}
 					time.Sleep(1 * time.Second)
-					tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
+					tempResult, err := execFioTest(path, path, fioSize)
 					if err == nil {
 						actualResults = append(actualResults, tempResult)
 					} else {
@@ -176,7 +176,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				}
 			}
 			// 检查是否有大于210GB的路径需要额外测试
-			for index, path := range mountPoints {
+			for _, path := range mountPoints {
 				if path == rootPath || path == tmpPath {
 					continue // 跳过已经测试过的默认路径
 				}
@@ -202,7 +202,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 							loggerInsert(Logger, "生成大容量路径FIO测试文件输出: "+buildOutput)
 						}
 						time.Sleep(1 * time.Second)
-						tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
+						tempResult, err := execFioTest(path, path, fioSize)
 						if err == nil {
 							actualResults = append(actualResults, tempResult)
 						} else {
