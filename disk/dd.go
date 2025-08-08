@@ -17,11 +17,11 @@ import (
 )
 
 // generateDDTestHeader 生成DD测试的表头
-func generateDDTestHeader(language string, devices []string) string {
+func generateDDTestHeader(language string, mountPoints []string) string {
 	// 计算所有设备名称中的最大宽度
-	maxDeviceWidth := 10 // 默认最小宽度
-	for _, device := range devices {
-		deviceWidth := getDeviceColumnWidth(device)
+	maxDeviceWidth := 15 // 默认最小宽度
+	for _, device := range mountPoints {
+		deviceWidth := getMountPointColumnWidth(device)
 		if deviceWidth > maxDeviceWidth {
 			maxDeviceWidth = deviceWidth
 		}
@@ -60,7 +60,7 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
-	result += generateDDTestHeader(language, devices)
+	result += generateDDTestHeader(language, mountPoints)
 	var targetPath string
 	if testPath == "" {
 		if enableMultiCheck {
@@ -309,11 +309,9 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	}
 	tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
 	defer os.Remove(fullBlockFile)
-
 	// 动态计算第一列宽度
-	deviceWidth := getDeviceColumnWidth(strings.TrimSpace(deviceName))
+	deviceWidth := getMountPointColumnWidth(strings.TrimSpace(deviceName))
 	result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, strings.TrimSpace(deviceName), blockName)
-
 	if err != nil {
 		loggerInsert(Logger, "Write test error: "+err.Error())
 		result += fmt.Sprintf("%-30s    ", "写入失败")
@@ -378,7 +376,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	rootPath, tmpPath := getDefaultTestPaths()
 	if runtime.GOOS == "darwin" {
 		testFilePath = tmpPath
-		deviceWidth := getDeviceColumnWidth(tmpPath)
+		deviceWidth := getMountPointColumnWidth(tmpPath)
 		result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, tmpPath, blockName)
 		fullBlockFile := filepath.Join(tmpPath, blockFile)
 		writeSource := getDevZeroPath()
@@ -440,14 +438,13 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				loggerInsert(Logger, "execDDTest error for "+tmpPath+" path: "+err.Error())
 			}
 			testFilePath = tmpPath
-			deviceWidth := getDeviceColumnWidth(tmpPath)
+			deviceWidth := getMountPointColumnWidth(tmpPath)
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, tmpPath, blockName)
 		} else {
 			testFilePath = rootPath
-			deviceWidth := getDeviceColumnWidth(rootPath)
+			deviceWidth := getMountPointColumnWidth(rootPath)
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, rootPath, blockName)
 		}
-
 		if err != nil {
 			result += fmt.Sprintf("%-30s    ", "写入失败")
 		} else {
@@ -460,7 +457,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			result += fmt.Sprintf("%-30s    ", parsedResult)
 		}
 	}
-
 	if runtime.GOOS != "windows" {
 		syncCmd := exec.Command("sync")
 		err := syncCmd.Run()
@@ -469,7 +465,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 	}
 	time.Sleep(1 * time.Second)
-
 	// 读取测试
 	fullBlockFile := filepath.Join(testFilePath, blockFile)
 	devNull := getDevNullPath()
@@ -492,7 +487,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 			loggerInsert(Logger, "读取测试到临时文件失败，尝试读取到当前目录: "+tempText)
 			time.Sleep(1 * time.Second)
-
 			readFile = filepath.Join(testFilePath, "read_"+blockFile)
 			tempText, err = execDDTest(fullBlockFile, readFile, bs, blockCount)
 			defer os.Remove(readFile)

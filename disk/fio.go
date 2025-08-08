@@ -17,30 +17,29 @@ import (
 )
 
 // generateFioTestHeader 生成FIO测试的表头
-// generateFioTestHeader 生成FIO测试的表头
-func generateFioTestHeader(language string, devices []string) string {
+func generateFioTestHeader(language string, mountPoints []string) string {
 	// 计算所有设备名称中的最大宽度
-	maxDeviceWidth := 10 // 默认最小宽度
-	for _, device := range devices {
-		deviceWidth := getDeviceColumnWidth(device)
+	maxDeviceWidth := 15 // 默认最小宽度
+	for _, device := range mountPoints {
+		deviceWidth := getMountPointColumnWidth(device)
 		if deviceWidth > maxDeviceWidth {
 			maxDeviceWidth = deviceWidth
 		}
 	}
 	var header string
 	if language == "en" {
-		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n", 
-			maxDeviceWidth, "Test Path", 
-			"Block", 
-			"Read(IOPS)", 
-			"Write(IOPS)", 
+		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
+			maxDeviceWidth, "Test Path",
+			"Block",
+			"Read(IOPS)",
+			"Write(IOPS)",
 			"Total(IOPS)")
 	} else {
-		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n", 
-			maxDeviceWidth, "测试路径", 
-			"块大小", 
-			"读测试(IOPS)", 
-			"写测试(IOPS)", 
+		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
+			maxDeviceWidth, "测试路径",
+			"块大小",
+			"读测试(IOPS)",
+			"写测试(IOPS)",
 			"总和(IOPS)")
 	}
 	return header
@@ -88,7 +87,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
-	result += generateFioTestHeader(language, devices)
+	result += generateFioTestHeader(language, mountPoints)
 	var defaultFioSize string
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
 		defaultFioSize = "512M"
@@ -428,15 +427,6 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	return result, nil
 }
 
-// getDeviceColumnWidth 计算设备名称列的动态宽度
-func getDeviceColumnWidth(devicename string) int {
-	deviceWidth := len(devicename) + 2
-	if deviceWidth < 10 {
-		deviceWidth = 10
-	}
-	return deviceWidth
-}
-
 // processFioOutput 处理fio输出结果
 func processFioOutput(tempText, BS, devicename string) string {
 	var result string
@@ -461,7 +451,7 @@ func processFioOutput(tempText, BS, devicename string) string {
 			loggerInsert(Logger, "块大小: "+BS+", 读取IOPS: "+DISK_IOPS_R+", 写入IOPS: "+DISK_IOPS_W+
 				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
 				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
-			deviceWidth := getDeviceColumnWidth(devicename)
+			deviceWidth := getMountPointColumnWidth(devicename)
 			// 拼接输出文本 - 修复对齐问题
 			result += fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
 				deviceWidth, devicename,

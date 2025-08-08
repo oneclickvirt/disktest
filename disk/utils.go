@@ -277,3 +277,12 @@ func checkFioIOEngine() string {
 	loggerInsert(Logger, "所有IO引擎都不可用，使用psync")
 	return "psync"
 }
+
+// getMountPointColumnWidth 计算名称列的动态宽度
+func getMountPointColumnWidth(name string) int {
+	width := len(name) + 2
+	if width < 10 {
+		width = 10
+	}
+	return width
+}
