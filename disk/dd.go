@@ -17,21 +17,15 @@ import (
 )
 
 // generateDDTestHeader 生成DD测试的表头
-func generateDDTestHeader(language string, mountPoints []string) string {
-	mountPointsWidth := 15 // 默认最小宽度
-	for _, mount := range mountPoints {
-		mountWidth := getMountPointColumnWidth(mount)
-		if mountWidth > mountPointsWidth {
-			mountPointsWidth = mountWidth
+func generateDDTestHeader(language string, actualTestPaths []string) string {
+	mountPointsWidth := 10 // 默认最小宽度
+	for _, path := range actualTestPaths {
+		pathWidth := getMountPointColumnWidth(path)
+		if pathWidth > mountPointsWidth {
+			mountPointsWidth = pathWidth
 		}
 	}
-	p1, p2 := getDefaultTestPaths()
-	if len(p1)+5 > mountPointsWidth {
-		mountPointsWidth = len(p1) + 5
-	}
-	if len(p2)+5 > mountPointsWidth {
-		mountPointsWidth = len(p2) + 5
-	}
+	mountPointsWidth += 2
 	var header string
 	if language == "en" {
 		header = fmt.Sprintf("%-*s    %-15s    %-30s    %-30s\n",
@@ -66,24 +60,43 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
-	result += generateDDTestHeader(language, mountPoints)
+	var actualTestPaths []string
 	var targetPath string
 	if testPath == "" {
 		if enableMultiCheck {
 			targetPath = ""
+			actualTestPaths = mountPoints
 		} else {
 			rootPath, tmpPath := getDefaultTestPaths()
 			if runtime.GOOS == "darwin" {
 				targetPath = tmpPath
+				actualTestPaths = []string{tmpPath}
 			} else if isWritableMountpoint(rootPath) {
 				targetPath = rootPath
+				actualTestPaths = []string{rootPath}
 			} else {
 				targetPath = tmpPath
+				actualTestPaths = []string{tmpPath}
+			}
+			// 检查是否有大于210GB的路径需要额外测试
+			for _, path := range mountPoints {
+				if path == rootPath || path == tmpPath {
+					continue
+				}
+				usage, err := disk.Usage(path)
+				if err != nil {
+					continue
+				}
+				if usage.Free > uint64(210*1024*1024*1024) {
+					actualTestPaths = append(actualTestPaths, path)
+				}
 			}
 		}
 	} else {
 		targetPath = testPath
+		actualTestPaths = []string{testPath}
 	}
+	result += generateDDTestHeader(language, actualTestPaths)
 	blockNames := []string{"100MB-4K Block", "1GB-1M Block"}
 	blockCounts := []string{"25600", "1000"}
 	blockSizes := []string{"4k", "1M"}

@@ -17,21 +17,15 @@ import (
 )
 
 // generateFioTestHeader 生成FIO测试的表头
-func generateFioTestHeader(language string, mountPoints []string) string {
-	mountPointsWidth := 15 // 默认最小宽度
-	for _, mount := range mountPoints {
-		mountWidth := getMountPointColumnWidth(mount)
-		if mountWidth > mountPointsWidth {
-			mountPointsWidth = mountWidth
+func generateFioTestHeader(language string, actualTestPaths []string) string {
+	mountPointsWidth := 10 // 默认最小宽度
+	for _, path := range actualTestPaths {
+		pathWidth := getMountPointColumnWidth(path)
+		if pathWidth > mountPointsWidth {
+			mountPointsWidth = pathWidth
 		}
 	}
-	p1, p2 := getDefaultTestPaths()
-	if len(p1)+5 > mountPointsWidth {
-		mountPointsWidth = len(p1) + 5
-	}
-	if len(p2)+5 > mountPointsWidth {
-		mountPointsWidth = len(p2) + 5
-	}
+	mountPointsWidth += 2
 	var header string
 	if language == "en" {
 		header = fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
@@ -68,13 +62,37 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
-	result += generateFioTestHeader(language, mountPoints)
+	var actualTestPaths []string
 	var defaultFioSize string
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
 		defaultFioSize = "512M"
 	} else {
 		defaultFioSize = "2G"
 	}
+	if testPath == "" {
+		if enableMultiCheck {
+			actualTestPaths = mountPoints
+		} else {
+			rootPath, tmpPath := getDefaultTestPaths()
+			actualTestPaths = []string{rootPath} // 默认先使用rootPath，实际测试中可能会切换到tmpPath
+			// 检查是否有大于210GB的路径需要额外测试
+			for _, path := range mountPoints {
+				if path == rootPath || path == tmpPath {
+					continue
+				}
+				usage, err := disk.Usage(path)
+				if err != nil {
+					continue
+				}
+				if usage.Free > uint64(210*1024*1024*1024) {
+					actualTestPaths = append(actualTestPaths, path)
+				}
+			}
+		}
+	} else {
+		actualTestPaths = []string{testPath}
+	}
+	result += generateFioTestHeader(language, actualTestPaths)
 	if testPath == "" {
 		if enableMultiCheck {
 			loggerInsert(Logger, "开始多路径FIO测试")
