@@ -27,13 +27,13 @@ func generateDDTestHeader(language string, actualTestPaths []string) string {
 	}
 	var header string
 	if language == "en" {
-		header = fmt.Sprintf("%-*s    %-15s    %-30s    %-30s\n",
+		header = fmt.Sprintf("%-*s    %-15s    %-27s    %-27s\n",
 			mountPointsWidth, "Test Path",
 			"Block Size",
 			"Direct Write(IOPS)",
 			"Direct Read(IOPS)")
 	} else {
-		header = fmt.Sprintf("%-*s    %-15s    %-30s    %-30s\n",
+		header = fmt.Sprintf("%-*s    %-15s    %-27s    %-27s\n",
 			mountPointsWidth, "测试路径",
 			"块大小",
 			"直接写入(IOPS)",
@@ -493,15 +493,15 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			}
 			testFilePath = tmpPath
 			deviceWidth := getMountPointColumnWidth(tmpPath)
-			if deviceWidth < 15 {
-				deviceWidth = 15
+			if deviceWidth < 14 {
+				deviceWidth = 14
 			}
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, tmpPath, blockName)
 		} else {
 			testFilePath = rootPath
 			deviceWidth := getMountPointColumnWidth(rootPath)
-			if deviceWidth < 15 {
-				deviceWidth = 15
+			if deviceWidth < 14 {
+				deviceWidth = 14
 			}
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, rootPath, blockName)
 		}

@@ -27,14 +27,14 @@ func generateFioTestHeader(language string, actualTestPaths []string) string {
 	}
 	var header string
 	if language == "en" {
-		header = fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
+		header = fmt.Sprintf("%-*s   %-7s   %-20s %-20s %-20s\n",
 			mountPointsWidth, "Test Path",
 			"Block",
 			"Read(IOPS)",
 			"Write(IOPS)",
 			"Total(IOPS)")
 	} else {
-		header = fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
+		header = fmt.Sprintf("%-*s   %-7s   %-20s %-20s %-20s\n",
 			mountPointsWidth, "测试路径",
 			"块大小",
 			"读测试(IOPS)",
