@@ -18,56 +18,37 @@ import (
 
 // generateFioTestHeader 生成FIO测试的表头
 func generateFioTestHeader(language string, mountPoints []string) string {
-	// 计算所有设备名称中的最大宽度
-	maxDeviceWidth := 15 // 默认最小宽度
-	for _, device := range mountPoints {
-		deviceWidth := getMountPointColumnWidth(device)
-		if deviceWidth > maxDeviceWidth {
-			maxDeviceWidth = deviceWidth
+	mountPointsWidth := 15 // 默认最小宽度
+	for _, mount := range mountPoints {
+		mountWidth := getMountPointColumnWidth(mount)
+		if mountWidth > mountPointsWidth {
+			mountPointsWidth = mountWidth
 		}
+	}
+	p1, p2 := getDefaultTestPaths()
+	if len(p1)+5 > mountPointsWidth {
+		mountPointsWidth = len(p1) + 5
+	}
+	if len(p2)+5 > mountPointsWidth {
+		mountPointsWidth = len(p2) + 5
 	}
 	var header string
 	if language == "en" {
-		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
-			maxDeviceWidth, "Test Path",
+		header = fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
+			mountPointsWidth, "Test Path",
 			"Block",
 			"Read(IOPS)",
 			"Write(IOPS)",
 			"Total(IOPS)")
 	} else {
-		header = fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
-			maxDeviceWidth, "测试路径",
+		header = fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
+			mountPointsWidth, "测试路径",
 			"块大小",
 			"读测试(IOPS)",
 			"写测试(IOPS)",
 			"总和(IOPS)")
 	}
 	return header
-}
-
-// getDefaultTestPaths 获取系统默认的测试路径
-func getDefaultTestPaths() (string, string) {
-	var rootPath, tmpPath string
-	if runtime.GOOS == "windows" {
-		userProfile := os.Getenv("USERPROFILE")
-		if userProfile == "" {
-			userProfile = "C:\\Users\\Default"
-		}
-		rootPath = userProfile
-		tmpPath = os.TempDir()
-	} else {
-		rootPath = "/root"
-		tmpPath = "/tmp"
-	}
-	return rootPath, tmpPath
-}
-
-// ensurePathExists 确保路径存在，如果不存在则创建
-func ensurePathExists(path string) error {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return os.MkdirAll(path, 0755)
-	}
-	return nil
 }
 
 // FioTest 通过fio测试硬盘

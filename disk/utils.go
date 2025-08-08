@@ -286,3 +286,28 @@ func getMountPointColumnWidth(name string) int {
 	}
 	return width
 }
+
+// getDefaultTestPaths 获取系统默认的测试路径
+func getDefaultTestPaths() (string, string) {
+	var rootPath, tmpPath string
+	if runtime.GOOS == "windows" {
+		userProfile := os.Getenv("USERPROFILE")
+		if userProfile == "" {
+			userProfile = "C:\\Users\\Default"
+		}
+		rootPath = userProfile
+		tmpPath = os.TempDir()
+	} else {
+		rootPath = "/root"
+		tmpPath = "/tmp"
+	}
+	return rootPath, tmpPath
+}
+
+// ensurePathExists 确保路径存在，如果不存在则创建
+func ensurePathExists(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return os.MkdirAll(path, 0755)
+	}
+	return nil
+}
