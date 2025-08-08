@@ -82,7 +82,7 @@ func main() {
 		}
 	}
 	fmt.Println("--------------------------------------------------")
-	fmt.Printf(res)
+	fmt.Print(res)
 	fmt.Println("--------------------------------------------------")
 	// TODO https://github.com/devlights/diskio
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
