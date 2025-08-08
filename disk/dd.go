@@ -359,6 +359,9 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
 	defer os.Remove(fullBlockFile)
 	deviceWidth := getMountPointColumnWidth(strings.TrimSpace(deviceName))
+	if deviceWidth < 15 {
+		deviceWidth = 15
+	}
 	result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, strings.TrimSpace(deviceName), blockName)
 	if err != nil {
 		loggerInsert(Logger, "Write test error: "+err.Error())
@@ -425,6 +428,9 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	if runtime.GOOS == "darwin" {
 		testFilePath = tmpPath
 		deviceWidth := getMountPointColumnWidth(tmpPath)
+		if deviceWidth < 15 {
+			deviceWidth = 15
+		}
 		result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, tmpPath, blockName)
 		fullBlockFile := filepath.Join(tmpPath, blockFile)
 		writeSource := getDevZeroPath()
@@ -487,10 +493,16 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			}
 			testFilePath = tmpPath
 			deviceWidth := getMountPointColumnWidth(tmpPath)
+			if deviceWidth < 15 {
+				deviceWidth = 15
+			}
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, tmpPath, blockName)
 		} else {
 			testFilePath = rootPath
 			deviceWidth := getMountPointColumnWidth(rootPath)
+			if deviceWidth < 15 {
+				deviceWidth = 15
+			}
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, rootPath, blockName)
 		}
 		if err != nil {

@@ -477,6 +477,9 @@ func processFioOutput(tempText, BS, devicename string) string {
 				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
 				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
 			deviceWidth := getMountPointColumnWidth(devicename)
+			if deviceWidth < 15 {
+				deviceWidth = 15
+			}
 			// 拼接输出文本
 			result += fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
 				deviceWidth, devicename,
