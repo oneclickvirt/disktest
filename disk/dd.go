@@ -44,8 +44,11 @@ func generateDDTestHeader(language string, actualTestPaths []string) string {
 }
 
 // DDTest 通过 dd 命令测试硬盘IO
+
+// DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	var result string
+	var actualResults []string // 存储实际测试结果
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
@@ -96,7 +99,7 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		targetPath = testPath
 		actualTestPaths = []string{testPath}
 	}
-	result += generateDDTestHeader(language, actualTestPaths)
+
 	blockNames := []string{"100MB-4K Block", "1GB-1M Block"}
 	blockCounts := []string{"25600", "1000"}
 	blockSizes := []string{"4k", "1M"}
@@ -121,12 +124,14 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 						continue
 					}
 					adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
-					result += ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+					tempResult := ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+					actualResults = append(actualResults, tempResult)
 				}
 			} else {
 				rootPath, tmpPath := getDefaultTestPaths()
 				loggerInsert(Logger, "开始单路径测试("+rootPath+"或"+tmpPath+")")
-				result += ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+				tempResult := ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+				actualResults = append(actualResults, tempResult)
 				// 检查是否有大于210GB的路径需要额外测试
 				for index, path := range mountPoints {
 					if path == rootPath || path == tmpPath {
@@ -146,7 +151,8 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 							continue
 						}
 						adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
-						result += ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+						tempResult := ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+						actualResults = append(actualResults, tempResult)
 					}
 				}
 			}
@@ -157,9 +163,44 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 				loggerInsert(Logger, "创建指定路径失败: "+testPath+", 错误: "+err.Error())
 				return "创建测试路径失败: " + err.Error()
 			}
-			result += ddTest1(testPath, testPath, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+			tempResult := ddTest1(testPath, testPath, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+			actualResults = append(actualResults, tempResult)
 		}
 	}
+
+	// 生成表头并拼接结果
+	if len(actualResults) > 0 {
+		// 从实际结果中提取路径名称来计算表头宽度
+		var actualTestPaths []string
+		for _, resultBlock := range actualResults {
+			lines := strings.Split(resultBlock, "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					// 从结果行中提取路径名称（第一列）
+					fields := strings.Fields(line)
+					if len(fields) > 0 {
+						pathName := fields[0]
+						// 检查是否已存在
+						found := false
+						for _, existingPath := range actualTestPaths {
+							if existingPath == pathName {
+								found = true
+								break
+							}
+						}
+						if !found {
+							actualTestPaths = append(actualTestPaths, pathName)
+						}
+					}
+				}
+			}
+		}
+		result += generateDDTestHeader(language, actualTestPaths)
+		for _, resultBlock := range actualResults {
+			result += resultBlock
+		}
+	}
+
 	return result
 }
 

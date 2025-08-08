@@ -53,6 +53,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		Logger.Info("开始FIO测试硬盘")
 	}
 	var result string
+	var actualResults []string // 存储实际测试结果
 	pathInfo, err := getTestPaths()
 	if err != nil {
 		if EnableLoger {
@@ -92,7 +93,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	} else {
 		actualTestPaths = []string{testPath}
 	}
-	result += generateFioTestHeader(language, actualTestPaths)
+
 	if testPath == "" {
 		if enableMultiCheck {
 			loggerInsert(Logger, "开始多路径FIO测试")
@@ -114,7 +115,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 					time.Sleep(1 * time.Second)
 					tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
 					if err == nil {
-						result += tempResult
+						actualResults = append(actualResults, tempResult)
 					} else {
 						loggerInsert(Logger, "执行FIO测试失败: "+err.Error())
 					}
@@ -172,7 +173,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				time.Sleep(1 * time.Second)
 				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
 				if err == nil {
-					result += tempResult
+					actualResults = append(actualResults, tempResult)
 				} else if EnableLoger {
 					Logger.Info("执行FIO测试失败: " + err.Error())
 				}
@@ -206,7 +207,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 						time.Sleep(1 * time.Second)
 						tempResult, err := execFioTest(path, strings.TrimSpace(devices[index]), fioSize)
 						if err == nil {
-							result += tempResult
+							actualResults = append(actualResults, tempResult)
 						} else {
 							loggerInsert(Logger, "执行大容量路径FIO测试失败: "+err.Error())
 						}
@@ -244,9 +245,41 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		time.Sleep(1 * time.Second)
 		tempResult, err := execFioTest(testPath, testPath, fioSize)
 		if err == nil {
-			result += tempResult
+			actualResults = append(actualResults, tempResult)
 		} else if EnableLoger {
 			Logger.Info("执行FIO测试失败: " + err.Error())
+		}
+	}
+	// 生成表头并拼接结果
+	if len(actualResults) > 0 {
+		// 从实际结果中提取路径名称来计算表头宽度
+		var actualTestPaths []string
+		for _, resultBlock := range actualResults {
+			lines := strings.Split(resultBlock, "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					// 从结果行中提取路径名称（第一列）
+					fields := strings.Fields(line)
+					if len(fields) > 0 {
+						pathName := fields[0]
+						// 检查是否已存在
+						found := false
+						for _, existingPath := range actualTestPaths {
+							if existingPath == pathName {
+								found = true
+								break
+							}
+						}
+						if !found {
+							actualTestPaths = append(actualTestPaths, pathName)
+						}
+					}
+				}
+			}
+		}
+		result += generateFioTestHeader(language, actualTestPaths)
+		for _, resultBlock := range actualResults {
+			result += resultBlock
 		}
 	}
 	return result
@@ -451,8 +484,8 @@ func processFioOutput(tempText, BS, devicename string) string {
 				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
 				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
 			deviceWidth := getMountPointColumnWidth(devicename)
-			// 拼接输出文本 - 修复对齐问题
-			result += fmt.Sprintf("%-*s    %-7s    %-23s    %-23s    %-23s\n",
+			// 拼接输出文本
+			result += fmt.Sprintf("%-*s   %-7s   %-23s %-23s %-23s\n",
 				deviceWidth, devicename,
 				BS,
 				formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")",
