@@ -34,9 +34,9 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
 	if language == "en" {
-		result += "Test Path     Block Size         Direct Write(IOPS)                Direct Read(IOPS)\n"
+		result += fmt.Sprintf("%-30s %-20s %-30s %-30s\n", "Test Path", "Block Size", "Direct Write(IOPS)", "Direct Read(IOPS)")
 	} else {
-		result += "测试路径      块大小             直接写入(IOPS)                    直接读取(IOPS)\n"
+		result += fmt.Sprintf("%-30s %-20s %-30s %-30s\n", "测试路径", "块大小", "直接写入(IOPS)", "直接读取(IOPS)")
 	}
 	var targetPath string
 	if testPath == "" {
@@ -60,7 +60,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 	blockSizes := []string{"4k", "1M"}
 	blockFiles := []string{"100MB.test", "1GB.test"}
 	if targetPath != "" {
-		// 确保目标路径存在
 		if err := ensurePathExists(targetPath); err != nil {
 			loggerInsert(Logger, "创建目标路径失败: "+targetPath+", 错误: "+err.Error())
 		}
@@ -73,7 +72,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 				loggerInsert(Logger, "开始多路径测试")
 				for index, path := range mountPoints {
 					loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
-					// 确保路径存在
 					if err := ensurePathExists(path); err != nil {
 						loggerInsert(Logger, "创建路径失败: "+path+", 错误: "+err.Error())
 						continue
@@ -85,20 +83,17 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 				rootPath, tmpPath := getDefaultTestPaths()
 				loggerInsert(Logger, "开始单路径测试("+rootPath+"或"+tmpPath+")")
 				result += ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
-				// 检查是否有大于210GB的路径需要额外测试
 				for index, path := range mountPoints {
 					if path == rootPath || path == tmpPath {
-						continue // 跳过已经测试过的默认路径
+						continue
 					}
 					usage, err := disk.Usage(path)
 					if err != nil {
 						loggerInsert(Logger, "获取路径"+path+"磁盘使用情况失败: "+err.Error())
 						continue
 					}
-					// 检查可用空间是否大于210GB (210 * 1024 * 1024 * 1024 bytes) (这是启用额外检测的条件)
 					if usage.Free > uint64(210*1024*1024*1024) {
 						loggerInsert(Logger, "检测到大容量路径: "+path+", 可用空间: "+fmt.Sprintf("%.2fGB", float64(usage.Free)/(1024*1024*1024))+", 进行额外测试")
-						// 确保路径存在
 						if err := ensurePathExists(path); err != nil {
 							loggerInsert(Logger, "创建大容量路径失败: "+path+", 错误: "+err.Error())
 							continue
@@ -110,7 +105,6 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			}
 		} else {
 			loggerInsert(Logger, "测试指定路径: "+testPath)
-			// 确保指定路径存在
 			if err := ensurePathExists(testPath); err != nil {
 				loggerInsert(Logger, "创建指定路径失败: "+testPath+", 错误: "+err.Error())
 				return "创建测试路径失败: " + err.Error()
@@ -190,7 +184,6 @@ func getDevNullPath() string {
 // getDevZeroPath 获取系统对应的zero设备路径
 func getDevZeroPath() string {
 	if runtime.GOOS == "windows" {
-		// Windows没有/dev/zero，我们需要用其他方法生成零数据
 		return ""
 	}
 	return "/dev/zero"
@@ -244,7 +237,6 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 		defer Logger.Sync()
 	}
 	fullBlockFile := filepath.Join(path, blockFile)
-	// 写入测试
 	var writeSource string
 	if runtime.GOOS == "windows" {
 		zeroFile := filepath.Join(path, "zero_temp")
@@ -262,19 +254,17 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	if err != nil {
 		loggerInsert(Logger, "Write test error: "+err.Error())
 	} else {
-		result += fmt.Sprintf("%-10s", strings.TrimSpace(deviceName)) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		result += fmt.Sprintf("%-30s %-20s ", truncateString(deviceName, 30), blockName)
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
-		result += parsedResult
+		result += fmt.Sprintf("%-30s", parsedResult)
 		time.Sleep(1 * time.Second)
 	}
-	// 同步
 	syncCmd := exec.Command("sync")
 	err = syncCmd.Run()
 	if err != nil && runtime.GOOS != "windows" {
 		loggerInsert(Logger, "sync command failed: "+err.Error())
 	}
-	// 读取测试
 	devNull := getDevNullPath()
 	tempText, err = execDDTest(fullBlockFile, devNull, bs, blockCount)
 	defer os.Remove(fullBlockFile)
@@ -297,7 +287,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	}
 	parsedResult := parseResultDD(tempText, blockCount)
 	loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
-	result += parsedResult
+	result += fmt.Sprintf("%-30s", parsedResult)
 	result += "\n"
 	return result
 }
@@ -313,7 +303,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	rootPath, tmpPath := getDefaultTestPaths()
 	if runtime.GOOS == "darwin" {
 		testFilePath = tmpPath
-		result += fmt.Sprintf("%-10s", tmpPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+		result += fmt.Sprintf("%-30s %-20s ", truncateString(tmpPath, 30), blockName)
 		fullBlockFile := filepath.Join(tmpPath, blockFile)
 		writeSource := getDevZeroPath()
 		tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
@@ -324,7 +314,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "写入测试路径: "+testFilePath)
 		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
-		result += parsedResult
+		result += fmt.Sprintf("%-30s", parsedResult)
 	} else {
 		var writeSource string
 		if runtime.GOOS == "windows" {
@@ -369,15 +359,15 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				loggerInsert(Logger, "execDDTest error for "+tmpPath+" path: "+err.Error())
 			}
 			testFilePath = tmpPath
-			result += fmt.Sprintf("%-10s", tmpPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+			result += fmt.Sprintf("%-30s %-20s ", truncateString(tmpPath, 30), blockName)
 		} else {
 			testFilePath = rootPath
-			result += fmt.Sprintf("%-10s", rootPath) + "    " + fmt.Sprintf("%-15s", blockName) + "    "
+			result += fmt.Sprintf("%-30s %-20s ", truncateString(rootPath, 30), blockName)
 		}
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "写入测试路径: "+testFilePath)
 		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
-		result += parsedResult
+		result += fmt.Sprintf("%-30s", parsedResult)
 	}
 	if runtime.GOOS != "windows" {
 		syncCmd := exec.Command("sync")
@@ -387,7 +377,6 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 	}
 	time.Sleep(1 * time.Second)
-	// 读取测试
 	fullBlockFile := filepath.Join(testFilePath, blockFile)
 	devNull := getDevNullPath()
 	tempText, err := execDDTest(fullBlockFile, devNull, bs, blockCount)
@@ -420,9 +409,17 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	}
 	parsedResult := parseResultDD(tempText, blockCount)
 	loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
-	result += parsedResult
+	result += fmt.Sprintf("%-30s", parsedResult)
 	result += "\n"
 	return result
+}
+
+// truncateString 截断字符串到指定长度
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
 
 // createZeroFile 为Windows系统创建指定大小的零文件
@@ -459,7 +456,7 @@ func createZeroFile(filePath, bs, blockCount string) error {
 		return err
 	}
 	defer file.Close()
-	buffer := make([]byte, 8192) // 8KB 缓冲区
+	buffer := make([]byte, 8192)
 	written := int64(0)
 	for written < totalSize {
 		writeSize := int64(len(buffer))

@@ -15,7 +15,7 @@ func main() {
 	go func() {
 		http.Get("https://hits.spiritlhl.net/disktest.svg?action=hit&title=Hits&title_bg=%23555555&count_bg=%230eecf8&edge_flat=false")
 	}()
-	fmt.Println("项目地址:", "https://github.com/oneclickvirt/disktest")
+	fmt.Println("Repo:", "https://github.com/oneclickvirt/disktest")
 	var showVersion, help bool
 	var language, testMethod, testPath, multiDisk string
 	disktestFlag := flag.NewFlagSet("disktest", flag.ContinueOnError)

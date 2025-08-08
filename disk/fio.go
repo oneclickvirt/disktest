@@ -59,9 +59,9 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
 	if language == "en" {
-		result += "Test Path     Block    Read(IOPS)              Write(IOPS)             Total(IOPS)\n"
+		result += fmt.Sprintf("%-30s %-8s %-25s %-25s %-25s\n", "Test Path", "Block", "Read(IOPS)", "Write(IOPS)", "Total(IOPS)")
 	} else {
-		result += "测试路径      块大小   读测试(IOPS)            写测试(IOPS)            总和(IOPS)\n"
+		result += fmt.Sprintf("%-30s %-8s %-25s %-25s %-25s\n", "测试路径", "块大小", "读测试(IOPS)", "写测试(IOPS)", "总和(IOPS)")
 	}
 	var defaultFioSize string
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
@@ -74,7 +74,6 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			loggerInsert(Logger, "开始多路径FIO测试")
 			for index, path := range mountPoints {
 				loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
-				// 确保路径存在
 				if err := ensurePathExists(path); err != nil {
 					loggerInsert(Logger, "创建路径失败: "+path+", 错误: "+err.Error())
 					continue
@@ -153,20 +152,17 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 					Logger.Info("执行FIO测试失败: " + err.Error())
 				}
 			}
-			// 检查是否有大于210GB的路径需要额外测试
 			for index, path := range mountPoints {
 				if path == rootPath || path == tmpPath {
-					continue // 跳过已经测试过的默认路径
+					continue
 				}
 				usage, err := disk.Usage(path)
 				if err != nil {
 					loggerInsert(Logger, "获取路径"+path+"磁盘使用情况失败: "+err.Error())
 					continue
 				}
-				// 检查可用空间是否大于210GB (210 * 1024 * 1024 * 1024 bytes) (这是启用额外检测的条件)
 				if usage.Free > uint64(210*1024*1024*1024) {
 					loggerInsert(Logger, "检测到大容量路径: "+path+", 可用空间: "+fmt.Sprintf("%.2fGB", float64(usage.Free)/(1024*1024*1024))+", 进行额外FIO测试")
-					// 确保路径存在
 					if err := ensurePathExists(path); err != nil {
 						loggerInsert(Logger, "创建大容量路径失败: "+path+", 错误: "+err.Error())
 						continue
@@ -323,7 +319,6 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	}
 	var result string
 	var baseArgs []string
-	// 获取可用的IO引擎
 	ioEngine := checkFioIOEngine()
 	loggerInsert(Logger, "使用IO引擎: "+ioEngine)
 	embeddedCmd, embeddedPath, err := fio.GetFIO()
@@ -410,29 +405,25 @@ func processFioOutput(tempText, BS, devicename string) string {
 	for _, l := range tempList {
 		if strings.Contains(l, "rand_rw_"+BS) {
 			tpList := strings.Split(l, ";")
-			// IOPS
 			DISK_IOPS_R := tpList[7]
 			DISK_IOPS_W := tpList[48]
 			DISK_IOPS_R_INT, _ := strconv.Atoi(DISK_IOPS_R)
 			DISK_IOPS_W_INT, _ := strconv.Atoi(DISK_IOPS_W)
 			DISK_IOPS := DISK_IOPS_R_INT + DISK_IOPS_W_INT
-			// Speed
 			DISK_TEST_R := tpList[6]
 			DISK_TEST_W := tpList[47]
 			DISK_TEST_R_INT, _ := strconv.ParseFloat(DISK_TEST_R, 64)
 			DISK_TEST_W_INT, _ := strconv.ParseFloat(DISK_TEST_W, 64)
 			DISK_TEST := DISK_TEST_R_INT + DISK_TEST_W_INT
-			// 记录解析后的结果到日志
 			loggerInsert(Logger, "块大小: "+BS+", 读取IOPS: "+DISK_IOPS_R+", 写入IOPS: "+DISK_IOPS_W+
 				", 总IOPS: "+strconv.Itoa(DISK_IOPS)+", 读取速度: "+DISK_TEST_R+
 				", 写入速度: "+DISK_TEST_W+", 总速度: "+fmt.Sprintf("%f", DISK_TEST))
-			// 拼接输出文本
-			result += fmt.Sprintf("%-10s", devicename) + "    "
-			result += fmt.Sprintf("%-5s", BS) + "    "
-			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")") + "    "
-			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")") + "    "
-			result += fmt.Sprintf("%-20s", formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")") + "    "
-			result += "\n"
+			result += fmt.Sprintf("%-30s %-8s %-25s %-25s %-25s\n",
+				truncateString(devicename, 30),
+				BS,
+				formatSpeed(DISK_TEST_R, "string")+"("+formatIOPS(DISK_IOPS_R, "string")+")",
+				formatSpeed(DISK_TEST_W, "string")+"("+formatIOPS(DISK_IOPS_W, "string")+")",
+				formatSpeed(DISK_TEST, "float64")+"("+formatIOPS(DISK_IOPS, "int")+")")
 		}
 	}
 	return result
