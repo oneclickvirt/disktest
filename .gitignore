@@ -1,0 +1,9 @@
+# Binaries
+disktest
+disktest.exe
+
+# Log files
+*.log
+
+# Temporary files
+.tmp_*
