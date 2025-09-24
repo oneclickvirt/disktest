@@ -72,6 +72,16 @@ func isExpectedFsType(fsType string) bool {
 	return false
 }
 
+// containsMountPoint 检查挂载点是否已存在于列表中
+func containsMountPoint(mountPoints []string, mountPoint string) bool {
+	for _, existing := range mountPoints {
+		if existing == mountPoint {
+			return true
+		}
+	}
+	return false
+}
+
 // getTestPaths 获取可用的测试路径,返回设备和挂载点列表
 func getTestPaths() (TestPathInfo, error) {
 	var pathInfo TestPathInfo
@@ -107,18 +117,28 @@ func getTestPaths() (TestPathInfo, error) {
 			// 优先选择期望的文件系统类型
 			if isExpectedFsType(fsType) {
 				if isWritableMountpoint(f.Mountpoint) {
-					pathInfo.Devices = append(pathInfo.Devices, f.Device)
-					pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
-					loggerInsert(Logger, "添加期望文件系统可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					// 检查挂载点是否已存在，避免重复添加
+					if !containsMountPoint(pathInfo.MountPoints, f.Mountpoint) {
+						pathInfo.Devices = append(pathInfo.Devices, f.Device)
+						pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
+						loggerInsert(Logger, "添加期望文件系统可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					} else {
+						loggerInsert(Logger, "跳过重复挂载点: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					}
 				} else {
 					loggerInsert(Logger, "期望文件系统但不可写: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 				}
 			} else {
 				// 其他文件系统类型，如果可写也加入
 				if isWritableMountpoint(f.Mountpoint) {
-					pathInfo.Devices = append(pathInfo.Devices, f.Device)
-					pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
-					loggerInsert(Logger, "添加其他可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					// 检查挂载点是否已存在，避免重复添加
+					if !containsMountPoint(pathInfo.MountPoints, f.Mountpoint) {
+						pathInfo.Devices = append(pathInfo.Devices, f.Device)
+						pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
+						loggerInsert(Logger, "添加其他可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					} else {
+						loggerInsert(Logger, "跳过重复挂载点: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					}
 				} else {
 					loggerInsert(Logger, "其他文件系统但不可写: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 				}
