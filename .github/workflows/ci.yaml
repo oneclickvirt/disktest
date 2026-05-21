@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   workflow_dispatch:
 
@@ -12,10 +15,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
 
@@ -27,7 +30,7 @@ jobs:
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-          TAG="v0.0.10-$(date +'%Y%m%d%H%M%S')"
+          TAG="v0.0.11-$(date +'%Y%m%d%H%M%S')"
           echo "TAG=$TAG" >> $GITHUB_ENV
           git tag $TAG
           git push origin $TAG

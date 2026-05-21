@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/oneclickvirt/defaultset"
 	"github.com/oneclickvirt/fio"
 	"github.com/shirou/gopsutil/disk"
 )
@@ -96,7 +95,11 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		if enableMultiCheck {
 			loggerInsert(Logger, "开始多路径FIO测试")
 			for index, path := range mountPoints {
-				loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
+				deviceName := path
+				if index < len(devices) {
+					deviceName = devices[index]
+				}
+				loggerInsert(Logger, "测试路径: "+path+", 设备: "+deviceName)
 				if err := ensurePathExists(path); err != nil {
 					loggerInsert(Logger, "创建路径失败: "+path+", 错误: "+err.Error())
 					continue
@@ -338,8 +341,12 @@ func buildFioFile(path, fioSize string) (string, error) {
 		loggerInsert(Logger, "使用嵌入的fio二进制文件: "+embeddedPath)
 	} else {
 		loggerInsert(Logger, "fio不可用: "+err.Error())
+		return "", err
 	}
-	args = strings.Split(embeddedCmd, " ")
+	args = splitCommand(embeddedCmd)
+	if len(args) == 0 {
+		return "", fmt.Errorf("fio command is empty")
+	}
 	testFilePath := filepath.Join(path, "test.fio")
 	args = append(args, "--name=setup", "--ioengine="+checkFioIOEngine(), "--rw=read", "--bs=64k", "--iodepth=64", "--numjobs=2", "--size="+fioSize, "--runtime=1", "--gtod_reduce=1", "--filename="+testFilePath, "--direct=1", "--minimal")
 	cmd1 := exec.Command(args[0], args[1:]...)
@@ -360,6 +367,9 @@ func buildFioFile(path, fioSize string) (string, error) {
 	tempText := string(outputBytes)
 	if tempText != "" {
 		loggerInsert(Logger, "生成FIO测试文件输出: "+tempText)
+	}
+	if err := cmd1.Wait(); err != nil {
+		return tempText, err
 	}
 	return tempText, nil
 }
@@ -382,8 +392,12 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		loggerInsert(Logger, "使用嵌入的fio二进制文件: "+embeddedPath)
 	} else {
 		loggerInsert(Logger, "fio不可用: "+err.Error())
+		return "", err
 	}
-	baseArgs = strings.Split(embeddedCmd, " ")
+	baseArgs = splitCommand(embeddedCmd)
+	if len(baseArgs) == 0 {
+		return "", fmt.Errorf("fio command is empty")
+	}
 	testFilePath := filepath.Join(path, "test.fio")
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
 	for _, BS := range blockSizes {
@@ -460,6 +474,10 @@ func processFioOutput(tempText, BS, devicename string) string {
 	for _, l := range tempList {
 		if strings.Contains(l, "rand_rw_"+BS) {
 			tpList := strings.Split(l, ";")
+			if len(tpList) <= 48 {
+				loggerInsert(Logger, "fio输出字段不足，跳过该行: "+l)
+				continue
+			}
 			// IOPS
 			DISK_IOPS_R := tpList[7]
 			DISK_IOPS_W := tpList[48]

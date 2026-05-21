@@ -8,12 +8,33 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/mattn/go-runewidth"
-	. "github.com/oneclickvirt/defaultset"
 	"github.com/oneclickvirt/fio"
 	"go.uber.org/zap"
 )
+
+var (
+	Logger         = zap.NewNop()
+	loggerInitOnce sync.Once
+)
+
+func InitLogger() {
+	if !EnableLoger {
+		return
+	}
+	loggerInitOnce.Do(func() {
+		cfg := zap.NewProductionConfig()
+		cfg.Encoding = "console"
+		logger, err := cfg.Build()
+		if err != nil {
+			Logger = zap.NewNop()
+			return
+		}
+		Logger = logger
+	})
+}
 
 func commandExists(cmd string) bool {
 	_, err := exec.LookPath(cmd)
@@ -21,9 +42,14 @@ func commandExists(cmd string) bool {
 }
 
 func loggerInsert(Logger *zap.Logger, st string) {
-	if EnableLoger {
+	if EnableLoger && Logger != nil {
 		Logger.Info(st)
 	}
+}
+
+func splitCommand(cmd string) []string {
+	parts := strings.Fields(strings.TrimSpace(cmd))
+	return parts
 }
 
 func isWritableMountpoint(path string) bool {
@@ -234,7 +260,11 @@ func checkFioIOEngine() string {
 	if embeddedCmd == "" {
 		return "psync"
 	}
-	parts := strings.Split(embeddedCmd, " ")
+	parts := splitCommand(embeddedCmd)
+	if len(parts) == 0 {
+		loggerInsert(Logger, "fio命令为空，使用psync")
+		return "psync"
+	}
 	var tempDir string
 	var tempFile string
 	if runtime.GOOS == "windows" {

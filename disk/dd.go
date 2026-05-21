@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/oneclickvirt/dd"
-	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
 )
 
@@ -112,14 +111,18 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			if enableMultiCheck {
 				loggerInsert(Logger, "开始多路径测试")
 				for index, path := range mountPoints {
-					loggerInsert(Logger, "测试路径: "+path+", 设备: "+devices[index])
+					deviceName := path
+					if index < len(devices) {
+						deviceName = devices[index]
+					}
+					loggerInsert(Logger, "测试路径: "+path+", 设备: "+deviceName)
 					// 确保路径存在
 					if err := ensurePathExists(path); err != nil {
 						loggerInsert(Logger, "创建路径失败: "+path+", 错误: "+err.Error())
 						continue
 					}
 					adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
-					tempResult := ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+					tempResult := ddTest1(path, deviceName, adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
 					actualResults = append(actualResults, tempResult)
 				}
 			} else {
@@ -146,7 +149,11 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 							continue
 						}
 						adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
-						tempResult := ddTest1(path, devices[index], adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+						deviceName := path
+						if index < len(devices) {
+							deviceName = devices[index]
+						}
+						tempResult := ddTest1(path, deviceName, adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
 						actualResults = append(actualResults, tempResult)
 					}
 				}

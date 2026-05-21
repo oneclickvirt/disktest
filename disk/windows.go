@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
 )
 
@@ -57,21 +56,27 @@ func getDiskPerformance(device string) string {
 			tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Random 16.0 Read", ""))
 			if tempText != "" {
 				tpList := strings.Split(tempText, "MB/s")
-				result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+				if len(tpList) >= 2 {
+					result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+				}
 			}
 		} else if strings.Contains(l, "> Disk  Sequential 64.0 Read") {
 			// 顺序读取速度
 			tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Sequential 64.0 Read", ""))
 			if tempText != "" {
 				tpList := strings.Split(tempText, "MB/s")
-				result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+				if len(tpList) >= 2 {
+					result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+				}
 			}
 		} else if strings.Contains(l, "> Disk  Sequential 64.0 Write") {
 			// 顺序写入速度
 			tempText := strings.TrimSpace(strings.ReplaceAll(l, "> Disk  Sequential 64.0 Write", ""))
 			if tempText != "" {
 				tpList := strings.Split(tempText, "MB/s")
-				result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+				if len(tpList) >= 2 {
+					result += fmt.Sprintf("%-20s", strings.TrimSpace(tpList[0]+"MB/s["+strings.TrimSpace(tpList[len(tpList)-1])+"]")) + "    "
+				}
 			}
 		}
 	}

@@ -3,7 +3,6 @@ package disk
 import (
 	"strings"
 
-	. "github.com/oneclickvirt/defaultset"
 	"github.com/shirou/gopsutil/disk"
 )
 
