@@ -146,3 +146,10 @@ func getTestPaths() (TestPathInfo, error) {
 	}
 	return pathInfo, err
 }
+
+// DiscoverTestPaths exposes the same writable mount discovery used by the
+// standalone legacy CLI so orchestrators can run an equivalent multi-disk
+// matrix without duplicating platform-specific filtering.
+func DiscoverTestPaths() (TestPathInfo, error) {
+	return getTestPaths()
+}
