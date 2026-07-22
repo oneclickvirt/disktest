@@ -79,8 +79,16 @@ func TestEnsureMatrixSpaceRejectsRawDeviceAndSmallFile(t *testing.T) {
 
 func TestRunStandardFioMatrixRejectsUnsafeSizeBeforeExecution(t *testing.T) {
 	result := RunStandardFioMatrix(context.Background(), MatrixConfig{Path: t.TempDir(), SizeBytes: 1 << 20})
-	if result.Status != "unavailable" || result.Error == "" || result.DurationMS < 0 {
+	if result.Status != "unavailable" || result.Error != "unsafe_test_size" || result.DurationMS < 0 {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestRunStandardFioMatrixDoesNotExposeMissingPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private", "missing")
+	result := RunStandardFioMatrix(context.Background(), MatrixConfig{Path: path, SizeBytes: 16 << 20})
+	if result.Status != "unavailable" || result.Error != "test_path_not_found" || strings.Contains(result.Error, path) {
+		t.Fatalf("unexpected missing-path result: %+v", result)
 	}
 }
 

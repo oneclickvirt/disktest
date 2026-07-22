@@ -202,16 +202,16 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 	matrixCtx, cancel := context.WithTimeout(ctx, config.MaxDuration)
 	defer cancel()
 	if err := matrixCtx.Err(); err != nil {
-		result.Status, result.Error = matrixStopStatus(err), err.Error()
+		result.Status, result.Error = matrixStopStatus(err), stableMatrixError(err)
 		return result
 	}
 	if err := ensureMatrixSpace(config.Path, config.SizeBytes); err != nil {
-		result.Status, result.Error = "unavailable", err.Error()
+		result.Status, result.Error = "unavailable", stableTestPathError(err)
 		return result
 	}
 	testFile, err := os.CreateTemp(config.Path, ".goecs-fio-*")
 	if err != nil {
-		result.Status, result.Error = "unavailable", err.Error()
+		result.Status, result.Error = "unavailable", stableTestPathError(err)
 		return result
 	}
 	testPath := testFile.Name()
@@ -227,7 +227,7 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 		} else {
 			result.Status = "unavailable"
 		}
-		result.Error = err.Error()
+		result.Error = stableMatrixError(err)
 		return result
 	}
 	if len(acquired.Command) == 0 || strings.TrimSpace(acquired.Command[0]) == "" {
@@ -242,7 +242,7 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 	ioEngine := selectMatrixIOEngine(matrixCtx, acquired.Command, config.Path, runner)
 	for _, scenario := range scenarios {
 		if err := matrixCtx.Err(); err != nil {
-			result.Status, result.Error = matrixStopStatus(err), err.Error()
+			result.Status, result.Error = matrixStopStatus(err), stableMatrixError(err)
 			return result
 		}
 		command := append([]string{}, acquired.Command...)
@@ -258,15 +258,15 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 		output, runErr := runner(matrixCtx, command)
 		if runErr != nil {
 			if matrixCtx.Err() != nil {
-				result.Status, result.Error = matrixStopStatus(matrixCtx.Err()), matrixCtx.Err().Error()
+				result.Status, result.Error = matrixStopStatus(matrixCtx.Err()), stableMatrixError(matrixCtx.Err())
 			} else {
-				result.Status, result.Error = "error", runErr.Error()
+				result.Status, result.Error = "error", "fio_failed"
 			}
 			return result
 		}
 		metrics, parseErr := ParseFioJSON(output, scenario.ID)
 		if parseErr != nil {
-			result.Status, result.Error = "error", parseErr.Error()
+			result.Status, result.Error = "error", "invalid_fio_output"
 			return result
 		}
 		result.Metrics = append(result.Metrics, metrics...)
@@ -332,6 +332,38 @@ func matrixStopStatus(err error) string {
 		return "canceled"
 	}
 	return "timeout"
+}
+
+func stableMatrixError(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "canceled"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "fio_unavailable"
+}
+
+func stableTestPathError(err error) string {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return "test_path_not_found"
+	case errors.Is(err, os.ErrPermission):
+		return "test_path_permission_denied"
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "insufficient free space"):
+		return "insufficient_space"
+	case strings.Contains(message, "not a directory"):
+		return "test_path_not_directory"
+	case strings.Contains(message, "raw device"):
+		return "raw_device_forbidden"
+	case strings.Contains(message, "at least 16 mib"):
+		return "unsafe_test_size"
+	default:
+		return "test_path_unavailable"
+	}
 }
 
 func selectMatrixIOEngine(ctx context.Context, commandParts []string, directory string, runner fioCommandRunner) string {

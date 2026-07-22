@@ -20,6 +20,9 @@ type cliOptions struct {
 	language, testMethod, multiDisk, path string
 	sizeBytes                             int64
 	timeout, runtime                      time.Duration
+	languageSet, methodSet, multiDiskSet  bool
+	pathSet, sizeSet, timeoutSet          bool
+	runtimeSet                            bool
 }
 
 func parseCLI(args []string) (cliOptions, error) {
@@ -28,11 +31,68 @@ func parseCLI(args []string) (cliOptions, error) {
 	if err := fs.Parse(args); err != nil {
 		return opts, err
 	}
-	if opts.runtime < 0 || opts.timeout < 0 || opts.sizeBytes < 0 {
-		return opts, fmt.Errorf("duration, timeout, and size must not be negative")
+	if fs.NArg() != 0 {
+		return opts, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	fs.Visit(func(current *flag.Flag) {
+		switch current.Name {
+		case "l":
+			opts.languageSet = true
+		case "m":
+			opts.methodSet = true
+		case "d":
+			opts.multiDiskSet = true
+		case "p":
+			opts.pathSet = true
+		case "duration":
+			opts.runtimeSet = true
+		case "timeout":
+			opts.timeoutSet = true
+		case "size":
+			opts.sizeSet = true
+		}
+	})
+	opts.language = strings.ToLower(strings.TrimSpace(opts.language))
+	opts.testMethod = strings.ToLower(strings.TrimSpace(opts.testMethod))
+	opts.multiDisk = strings.ToLower(strings.TrimSpace(opts.multiDisk))
+	opts.path = strings.TrimSpace(opts.path)
+	if opts.help || opts.version {
+		return opts, nil
+	}
+	if opts.language != "" && opts.language != "en" && opts.language != "zh" {
+		return opts, fmt.Errorf("language must be en or zh")
+	}
+	if opts.testMethod != "" && opts.testMethod != "fio" && opts.testMethod != "dd" && !(runtime.GOOS == "windows" && opts.testMethod == "winsat") {
+		return opts, fmt.Errorf("disk method must be fio or dd")
+	}
+	if opts.multiDisk != "" && opts.multiDisk != "single" && opts.multiDisk != "multi" {
+		return opts, fmt.Errorf("multi-disk mode must be single or multi")
+	}
+	if opts.pathSet && opts.path == "" {
+		return opts, fmt.Errorf("disk path must not be empty when specified")
 	}
 	if opts.deep {
 		opts.jsonOutput = true
+	}
+	if opts.jsonOutput {
+		if opts.languageSet || opts.methodSet || opts.multiDiskSet {
+			return opts, fmt.Errorf("-l, -m, and -d are not used with structured output")
+		}
+		if opts.runtimeSet && (opts.runtime <= 0 || opts.runtime > 10*time.Second) {
+			return opts, fmt.Errorf("structured duration must be greater than zero and at most 10s")
+		}
+		maximum := 60 * time.Second
+		if opts.deep {
+			maximum = 3 * time.Minute
+		}
+		if opts.timeoutSet && (opts.timeout <= 0 || opts.timeout > maximum) {
+			return opts, fmt.Errorf("structured timeout is outside the supported range")
+		}
+		if opts.sizeSet && (opts.sizeBytes < 16<<20 || opts.sizeBytes > 2<<30) {
+			return opts, fmt.Errorf("structured size must be between 16 MiB and 2 GiB")
+		}
+	} else if opts.runtimeSet || opts.timeoutSet || opts.sizeSet {
+		return opts, fmt.Errorf("-duration, -timeout, and -size require structured output")
 	}
 	return opts, nil
 }
@@ -92,10 +152,6 @@ func main() {
 		return
 	}
 	if action == "structured" {
-		if strings.TrimSpace(opts.testMethod) != "" || strings.TrimSpace(opts.multiDisk) != "" {
-			fmt.Fprintln(os.Stderr, "-m/--test-method and -d/--multi-disk are only supported by legacy output")
-			os.Exit(2)
-		}
 		config := disk.MatrixConfig{Path: opts.path, SizeBytes: opts.sizeBytes, Runtime: opts.runtime, MaxDuration: opts.timeout}
 		ctx := context.Background()
 		result := disk.MatrixResult{}
@@ -110,6 +166,9 @@ func main() {
 			return
 		}
 		fmt.Println(string(encoded))
+		if result.Status != "ok" {
+			os.Exit(1)
+		}
 		return
 	}
 	printLegacyHeader()
@@ -134,7 +193,7 @@ func main() {
 	if testPath == "" {
 		testPath = ""
 	} else if testPath != "" {
-		testPath = strings.TrimSpace(strings.ToLower(testPath))
+		testPath = strings.TrimSpace(testPath)
 	}
 	switch testMethod {
 	case "fio":
@@ -157,9 +216,9 @@ func main() {
 			res = "Unsupported test method specified.\n"
 		}
 	}
-	fmt.Println("--------------------------------------------------")
+	fmt.Println(" --------------------------------------------------")
 	fmt.Print(indentLegacyOutput(res))
-	fmt.Println("--------------------------------------------------")
+	fmt.Println(" --------------------------------------------------")
 	// TODO https://github.com/devlights/diskio
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		fmt.Println("Press Enter to exit...")
@@ -171,5 +230,5 @@ func printLegacyHeader() {
 	go func() {
 		http.Get("https://hits.spiritlhl.net/disktest.svg?action=hit&title=Hits&title_bg=%23555555&count_bg=%230eecf8&edge_flat=false")
 	}()
-	fmt.Println("Repo:", "https://github.com/oneclickvirt/disktest")
+	fmt.Println(" Repo:", "https://github.com/oneclickvirt/disktest")
 }

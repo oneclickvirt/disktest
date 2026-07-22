@@ -30,7 +30,7 @@ func RunDeepMultiPathMatrix(ctx context.Context, paths []string, config MatrixCo
 		}
 		seen[absolute] = struct{}{}
 		if err := ctx.Err(); err != nil {
-			result.Status, result.Error = matrixStopStatus(err), err.Error()
+			result.Status, result.Error = matrixStopStatus(err), stableMatrixError(err)
 			return result
 		}
 		pathConfig := config
