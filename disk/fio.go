@@ -50,7 +50,6 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		defer Logger.Sync()
 		Logger.Info("开始FIO测试硬盘")
 	}
-	var result string
 	var actualResults []string // 存储实际测试结果
 	pathInfo, err := getTestPaths()
 	if err != nil {
@@ -114,9 +113,10 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 					}
 					time.Sleep(1 * time.Second)
 					tempResult, err := execFioTest(path, path, fioSize)
-					if err == nil {
+					if strings.TrimSpace(tempResult) != "" {
 						actualResults = append(actualResults, tempResult)
-					} else {
+					}
+					if err != nil {
 						loggerInsert(Logger, "执行FIO测试失败: "+err.Error())
 					}
 				} else {
@@ -172,9 +172,10 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 				loggerInsert(Logger, "使用路径进行FIO测试: "+buildPath)
 				time.Sleep(1 * time.Second)
 				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
-				if err == nil {
+				if strings.TrimSpace(tempResult) != "" {
 					actualResults = append(actualResults, tempResult)
-				} else if EnableLoger {
+				}
+				if err != nil && EnableLoger {
 					Logger.Info("执行FIO测试失败: " + err.Error())
 				}
 			}
@@ -206,9 +207,10 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 						}
 						time.Sleep(1 * time.Second)
 						tempResult, err := execFioTest(path, path, fioSize)
-						if err == nil {
+						if strings.TrimSpace(tempResult) != "" {
 							actualResults = append(actualResults, tempResult)
-						} else {
+						}
+						if err != nil {
 							loggerInsert(Logger, "执行大容量路径FIO测试失败: "+err.Error())
 						}
 					} else {
@@ -221,7 +223,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		loggerInsert(Logger, "测试指定路径: "+testPath)
 		if err := ensurePathExists(testPath); err != nil {
 			loggerInsert(Logger, "创建指定路径失败: "+testPath+", 错误: "+err.Error())
-			return "创建测试路径失败: " + err.Error()
+			return localizedText(language, "创建测试路径失败", "Unable to create test path") + "\n"
 		}
 		fioSize := adjustFioTestSize(testPath, defaultFioSize)
 		loggerInsert(Logger, "指定路径FIO测试文件大小: "+fioSize)
@@ -237,48 +239,21 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 					Logger.Info("输出: " + tempText)
 				}
 			}
-			return tempText
+			return ""
 		}
 		if EnableLoger && tempText != "" {
 			Logger.Info("在指定路径生成FIO测试文件输出: " + tempText)
 		}
 		time.Sleep(1 * time.Second)
 		tempResult, err := execFioTest(testPath, testPath, fioSize)
-		if err == nil {
+		if strings.TrimSpace(tempResult) != "" {
 			actualResults = append(actualResults, tempResult)
-		} else if EnableLoger {
+		}
+		if err != nil && EnableLoger {
 			Logger.Info("执行FIO测试失败: " + err.Error())
 		}
 	}
-	if len(actualResults) > 0 {
-		var actualTestPaths []string
-		for _, resultBlock := range actualResults {
-			lines := strings.Split(resultBlock, "\n")
-			for _, line := range lines {
-				if strings.TrimSpace(line) != "" {
-					fields := strings.Fields(line)
-					if len(fields) > 0 {
-						pathName := fields[0]
-						found := false
-						for _, existingPath := range actualTestPaths {
-							if existingPath == pathName {
-								found = true
-								break
-							}
-						}
-						if !found {
-							actualTestPaths = append(actualTestPaths, pathName)
-						}
-					}
-				}
-			}
-		}
-		result += generateFioTestHeader(language, actualTestPaths)
-		for _, resultBlock := range actualResults {
-			result += resultBlock
-		}
-	}
-	return result
+	return renderLegacyResults(language, actualResults, generateFioTestHeader)
 }
 
 // adjustFioTestSize 根据可用磁盘空间调整FIO测试文件大小
@@ -400,6 +375,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	}
 	testFilePath := filepath.Join(path, "test.fio")
 	blockSizes := []string{"4k", "64k", "512k", "1m"}
+	var firstErr error
 	for _, BS := range blockSizes {
 		loggerInsert(Logger, "开始测试块大小: "+BS)
 		var args []string
@@ -441,29 +417,41 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 				"--minimal",
 			}
 		}
+		var output []byte
+		var runErr error
 		if commandExists("timeout") && runtime.GOOS != "windows" {
 			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
-			output, err := cmd2.Output()
-			if err != nil {
-				loggerInsert(Logger, "failed to execute fio command: "+err.Error())
-				return "", err
-			} else {
-				tempText := string(output)
-				result += processFioOutput(tempText, BS, devicename)
-			}
+			output, runErr = cmd2.CombinedOutput()
 		} else {
 			cmd2 := exec.Command(baseArgs[0], append(baseArgs[1:], fioArgs...)...)
-			output, err := cmd2.Output()
-			if err != nil {
-				loggerInsert(Logger, "failed to execute fio command: "+err.Error())
-				return "", err
-			} else {
-				tempText := string(output)
-				result += processFioOutput(tempText, BS, devicename)
+			output, runErr = cmd2.CombinedOutput()
+		}
+		parsed := processFioOutput(string(output), BS, devicename)
+		if parsed != "" {
+			result += parsed
+		}
+		if runErr != nil {
+			loggerInsert(Logger, "failed to execute fio command: "+runErr.Error())
+			if result == "" {
+				return "", runErr
+			}
+			if firstErr == nil {
+				firstErr = runErr
+			}
+			continue
+		}
+		if parsed == "" {
+			parseErr := fmt.Errorf("fio output contains no result for block size %s", BS)
+			loggerInsert(Logger, parseErr.Error())
+			if result == "" {
+				return "", parseErr
+			}
+			if firstErr == nil {
+				firstErr = parseErr
 			}
 		}
 	}
-	return result, nil
+	return result, firstErr
 }
 
 // processFioOutput 处理fio输出结果

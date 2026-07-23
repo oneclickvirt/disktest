@@ -1,8 +1,8 @@
 package disk
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,7 +43,18 @@ func generateDDTestHeader(language string, actualTestPaths []string) string {
 
 // DDTest 通过 dd 命令测试硬盘IO
 func DDTest(language string, enableMultiCheck bool, testPath string) string {
-	var result string
+	return DDTestContext(context.Background(), language, enableMultiCheck, testPath)
+}
+
+// DDTestContext runs the legacy DD benchmark while honoring cancellation and
+// deadlines from API/GUI callers. DDTest keeps the original standalone API.
+func DDTestContext(ctx context.Context, language string, enableMultiCheck bool, testPath string) string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return ""
+	}
 	var actualResults []string
 	if EnableLoger {
 		InitLogger()
@@ -106,6 +117,9 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 		blockNames, blockCounts, blockFiles = adjustDDTestSize(targetPath, blockSizes, blockNames, blockCounts, blockFiles)
 	}
 	for ind, bs := range blockSizes {
+		if ctx.Err() != nil {
+			break
+		}
 		loggerInsert(Logger, "开始测试块大小: "+bs+", 文件: "+blockFiles[ind])
 		if testPath == "" {
 			if enableMultiCheck {
@@ -122,13 +136,13 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 						continue
 					}
 					adjustedBlockNames, adjustedBlockCounts, adjustedBlockFiles := adjustDDTestSize(path, []string{bs}, []string{blockNames[ind]}, []string{blockCounts[ind]}, []string{blockFiles[ind]})
-					tempResult := ddTest1(path, deviceName, adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+					tempResult := ddTest1(ctx, language, path, deviceName, adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
 					actualResults = append(actualResults, tempResult)
 				}
 			} else {
 				rootPath, tmpPath := getDefaultTestPaths()
 				loggerInsert(Logger, "开始单路径测试("+rootPath+"或"+tmpPath+")")
-				tempResult := ddTest2(blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+				tempResult := ddTest2(ctx, language, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 				actualResults = append(actualResults, tempResult)
 				// 检查是否有大于210GB的路径需要额外测试
 				for index, path := range mountPoints {
@@ -153,7 +167,7 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 						if index < len(devices) {
 							deviceName = devices[index]
 						}
-						tempResult := ddTest1(path, deviceName, adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
+						tempResult := ddTest1(ctx, language, path, deviceName, adjustedBlockFiles[0], adjustedBlockNames[0], adjustedBlockCounts[0], bs)
 						actualResults = append(actualResults, tempResult)
 					}
 				}
@@ -162,45 +176,13 @@ func DDTest(language string, enableMultiCheck bool, testPath string) string {
 			loggerInsert(Logger, "测试指定路径: "+testPath)
 			if err := ensurePathExists(testPath); err != nil {
 				loggerInsert(Logger, "创建指定路径失败: "+testPath+", 错误: "+err.Error())
-				return "创建测试路径失败: " + err.Error()
+				return localizedText(language, "创建测试路径失败", "Unable to create test path") + "\n"
 			}
-			tempResult := ddTest1(testPath, testPath, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
+			tempResult := ddTest1(ctx, language, testPath, testPath, blockFiles[ind], blockNames[ind], blockCounts[ind], bs)
 			actualResults = append(actualResults, tempResult)
 		}
 	}
-	// 生成表头并拼接结果
-	if len(actualResults) > 0 {
-		// 从实际结果中提取路径名称来计算表头宽度
-		var actualTestPaths []string
-		for _, resultBlock := range actualResults {
-			lines := strings.Split(resultBlock, "\n")
-			for _, line := range lines {
-				if strings.TrimSpace(line) != "" {
-					// 从结果行中提取路径名称（第一列）
-					fields := strings.Fields(line)
-					if len(fields) > 0 {
-						pathName := fields[0]
-						// 检查是否已存在
-						found := false
-						for _, existingPath := range actualTestPaths {
-							if existingPath == pathName {
-								found = true
-								break
-							}
-						}
-						if !found {
-							actualTestPaths = append(actualTestPaths, pathName)
-						}
-					}
-				}
-			}
-		}
-		result += generateDDTestHeader(language, actualTestPaths)
-		for _, resultBlock := range actualResults {
-			result += resultBlock
-		}
-	}
-	return result
+	return renderLegacyResults(language, actualResults, generateDDTestHeader)
 }
 
 // adjustDDTestSize 根据可用磁盘空间调整DD测试参数
@@ -279,6 +261,16 @@ func getDevZeroPath() string {
 
 // execDDTest 执行dd命令测试硬盘IO，并回传结果和测试错误
 func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
+	return execDDTestContext(context.Background(), ifKey, ofKey, bs, blockCount)
+}
+
+func execDDTestContext(ctx context.Context, ifKey, ofKey, bs, blockCount string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
@@ -301,23 +293,9 @@ func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
 		args = append(args, "oflag=direct")
 	}
 	loggerInsert(Logger, fmt.Sprintf("完整命令参数: %s %s", parts[0], strings.Join(args, " ")))
-	cmd2 := exec.Command(parts[0], args...)
-	stderr2, err := cmd2.StderrPipe()
+	cmd2 := exec.CommandContext(ctx, parts[0], args...)
+	outputBytes, err := cmd2.CombinedOutput()
 	if err != nil {
-		loggerInsert(Logger, "failed to get StderrPipe: "+err.Error())
-		return "", err
-	}
-	if err := cmd2.Start(); err != nil {
-		loggerInsert(Logger, "failed to start command: "+err.Error())
-		return "", err
-	}
-	outputBytes, err := io.ReadAll(stderr2)
-	if err != nil {
-		loggerInsert(Logger, "failed to read stderr: "+err.Error())
-		return "", err
-	}
-	// 等待命令完成并检查退出状态
-	if err := cmd2.Wait(); err != nil {
 		loggerInsert(Logger, "DD命令执行失败: "+err.Error())
 		tempText = string(outputBytes)
 		loggerInsert(Logger, "DD命令错误输出: "+tempText)
@@ -343,7 +321,7 @@ func execDDTest(ifKey, ofKey, bs, blockCount string) (string, error) {
 }
 
 // ddTest1 无重试机制
-func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) string {
+func ddTest1(ctx context.Context, language, path, deviceName, blockFile, blockName, blockCount, bs string) string {
 	var result string
 	if EnableLoger {
 		InitLogger()
@@ -363,7 +341,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	} else {
 		writeSource = getDevZeroPath()
 	}
-	tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
+	tempText, err := execDDTestContext(ctx, writeSource, fullBlockFile, bs, blockCount)
 	defer os.Remove(fullBlockFile)
 	deviceWidth := getMountPointColumnWidth(strings.TrimSpace(deviceName))
 	if deviceWidth < 15 {
@@ -372,15 +350,18 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, strings.TrimSpace(deviceName), blockName)
 	if err != nil {
 		loggerInsert(Logger, "Write test error: "+err.Error())
-		result += fmt.Sprintf("%-30s    ", "写入失败")
+		result += fmt.Sprintf("%-30s    ", localizedText(language, "写入失败", "Write failed"))
 	} else {
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
 		if strings.TrimSpace(parsedResult) == "" {
-			parsedResult = "无法解析结果"
+			parsedResult = localizedText(language, "无法解析结果", "Unable to parse result")
 		}
 		result += fmt.Sprintf("%-30s    ", parsedResult)
-		time.Sleep(1 * time.Second)
+		if !sleepContext(ctx, time.Second) {
+			result += fmt.Sprintf("%-30s\n", localizedText(language, "读取已取消", "Read canceled"))
+			return result
+		}
 	}
 	// 同步
 	syncCmd := exec.Command("sync")
@@ -390,7 +371,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 	}
 	// 读取测试
 	devNull := getDevNullPath()
-	tempText, err = execDDTest(fullBlockFile, devNull, bs, blockCount)
+	tempText, err = execDDTestContext(ctx, fullBlockFile, devNull, bs, blockCount)
 	defer os.Remove(fullBlockFile)
 	if err != nil {
 		loggerInsert(Logger, "Read test error: "+err.Error())
@@ -401,21 +382,24 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 			loggerInsert(Logger, "Read test (first attempt) error: "+err.Error())
 			loggerInsert(Logger, "Read test (first attempt) output: "+tempText)
 		}
-		time.Sleep(1 * time.Second)
+		if !sleepContext(ctx, time.Second) {
+			result += fmt.Sprintf("%-30s\n", localizedText(language, "读取已取消", "Read canceled"))
+			return result
+		}
 		readTestFile := filepath.Join(path, "read_"+blockFile)
-		tempText, err = execDDTest(fullBlockFile, readTestFile, bs, blockCount)
+		tempText, err = execDDTestContext(ctx, fullBlockFile, readTestFile, bs, blockCount)
 		defer os.Remove(readTestFile)
 		if err != nil {
 			loggerInsert(Logger, "Read test (second attempt) error: "+err.Error())
 		}
 	}
 	if err != nil {
-		result += fmt.Sprintf("%-30s", "读取失败")
+		result += fmt.Sprintf("%-30s", localizedText(language, "读取失败", "Read failed"))
 	} else {
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
 		if strings.TrimSpace(parsedResult) == "" {
-			parsedResult = "无法解析结果"
+			parsedResult = localizedText(language, "无法解析结果", "Unable to parse result")
 		}
 		result += fmt.Sprintf("%-30s", parsedResult)
 	}
@@ -424,7 +408,7 @@ func ddTest1(path, deviceName, blockFile, blockName, blockCount, bs string) stri
 }
 
 // ddTest2 有重试机制，重试至临时目录
-func ddTest2(blockFile, blockName, blockCount, bs string) string {
+func ddTest2(ctx context.Context, language, blockFile, blockName, blockCount, bs string) string {
 	var result string
 	var testFilePath string
 	if EnableLoger {
@@ -441,17 +425,17 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, tmpPath, blockName)
 		fullBlockFile := filepath.Join(tmpPath, blockFile)
 		writeSource := getDevZeroPath()
-		tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
+		tempText, err := execDDTestContext(ctx, writeSource, fullBlockFile, bs, blockCount)
 		defer os.Remove(fullBlockFile)
 		if err != nil {
 			loggerInsert(Logger, "execDDTest error for "+tmpPath+" path: "+err.Error())
-			result += fmt.Sprintf("%-30s    ", "写入失败")
+			result += fmt.Sprintf("%-30s    ", localizedText(language, "写入失败", "Write failed"))
 		} else {
 			parsedResult := parseResultDD(tempText, blockCount)
 			loggerInsert(Logger, "写入测试路径: "+testFilePath)
 			loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
 			if strings.TrimSpace(parsedResult) == "" {
-				parsedResult = "无法解析结果"
+				parsedResult = localizedText(language, "无法解析结果", "Unable to parse result")
 			}
 			result += fmt.Sprintf("%-30s    ", parsedResult)
 		}
@@ -474,7 +458,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			writeSource = getDevZeroPath()
 		}
 		fullBlockFile := filepath.Join(rootPath, blockFile)
-		tempText, err := execDDTest(writeSource, fullBlockFile, bs, blockCount)
+		tempText, err := execDDTestContext(ctx, writeSource, fullBlockFile, bs, blockCount)
 		defer os.Remove(fullBlockFile)
 		if err != nil {
 			loggerInsert(Logger, "execDDTest error for "+rootPath+" path: "+err.Error())
@@ -482,7 +466,9 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") || err != nil {
 			loggerInsert(Logger, "写入测试到"+rootPath+"失败，尝试写入到"+tmpPath+": "+tempText)
-			time.Sleep(1 * time.Second)
+			if !sleepContext(ctx, time.Second) {
+				return result
+			}
 			if runtime.GOOS == "windows" {
 				zeroFile := filepath.Join(tmpPath, "zero_temp")
 				defer os.Remove(zeroFile)
@@ -493,7 +479,7 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 				writeSource = zeroFile
 			}
 			fullBlockFile = filepath.Join(tmpPath, blockFile)
-			tempText, err = execDDTest(writeSource, fullBlockFile, bs, blockCount)
+			tempText, err = execDDTestContext(ctx, writeSource, fullBlockFile, bs, blockCount)
 			defer os.Remove(fullBlockFile)
 			if err != nil {
 				loggerInsert(Logger, "execDDTest error for "+tmpPath+" path: "+err.Error())
@@ -513,13 +499,13 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			result += fmt.Sprintf("%-*s    %-15s    ", deviceWidth, rootPath, blockName)
 		}
 		if err != nil {
-			result += fmt.Sprintf("%-30s    ", "写入失败")
+			result += fmt.Sprintf("%-30s    ", localizedText(language, "写入失败", "Write failed"))
 		} else {
 			parsedResult := parseResultDD(tempText, blockCount)
 			loggerInsert(Logger, "写入测试路径: "+testFilePath)
 			loggerInsert(Logger, "写入测试结果解析: "+parsedResult)
 			if strings.TrimSpace(parsedResult) == "" {
-				parsedResult = "无法解析结果"
+				parsedResult = localizedText(language, "无法解析结果", "Unable to parse result")
 			}
 			result += fmt.Sprintf("%-30s    ", parsedResult)
 		}
@@ -531,11 +517,14 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 			loggerInsert(Logger, "sync command failed: "+err.Error())
 		}
 	}
-	time.Sleep(1 * time.Second)
+	if !sleepContext(ctx, time.Second) {
+		result += fmt.Sprintf("%-30s\n", localizedText(language, "读取已取消", "Read canceled"))
+		return result
+	}
 	// 读取测试
 	fullBlockFile := filepath.Join(testFilePath, blockFile)
 	devNull := getDevNullPath()
-	tempText, err := execDDTest(fullBlockFile, devNull, bs, blockCount)
+	tempText, err := execDDTestContext(ctx, fullBlockFile, devNull, bs, blockCount)
 	defer os.Remove(fullBlockFile)
 	if err != nil {
 		loggerInsert(Logger, "execDDTest read error for "+testFilePath+" path: "+err.Error())
@@ -543,9 +532,12 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 	if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 		strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 		loggerInsert(Logger, "读取测试到null设备失败，尝试读取到临时文件: "+tempText)
-		time.Sleep(1 * time.Second)
+		if !sleepContext(ctx, time.Second) {
+			result += fmt.Sprintf("%-30s\n", localizedText(language, "读取已取消", "Read canceled"))
+			return result
+		}
 		readFile := filepath.Join(tmpPath, "read_"+blockFile)
-		tempText, err = execDDTest(fullBlockFile, readFile, bs, blockCount)
+		tempText, err = execDDTestContext(ctx, fullBlockFile, readFile, bs, blockCount)
 		defer os.Remove(readFile)
 		if err != nil {
 			loggerInsert(Logger, "execDDTest read error for tmp path: "+err.Error())
@@ -553,9 +545,12 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		if strings.Contains(tempText, "Invalid argument") || strings.Contains(tempText, "Permission denied") ||
 			strings.Contains(tempText, "失败") || strings.Contains(tempText, "无效的参数") {
 			loggerInsert(Logger, "读取测试到临时文件失败，尝试读取到当前目录: "+tempText)
-			time.Sleep(1 * time.Second)
+			if !sleepContext(ctx, time.Second) {
+				result += fmt.Sprintf("%-30s\n", localizedText(language, "读取已取消", "Read canceled"))
+				return result
+			}
 			readFile = filepath.Join(testFilePath, "read_"+blockFile)
-			tempText, err = execDDTest(fullBlockFile, readFile, bs, blockCount)
+			tempText, err = execDDTestContext(ctx, fullBlockFile, readFile, bs, blockCount)
 			defer os.Remove(readFile)
 			if err != nil {
 				loggerInsert(Logger, "execDDTest read error for current path: "+err.Error())
@@ -563,12 +558,12 @@ func ddTest2(blockFile, blockName, blockCount, bs string) string {
 		}
 	}
 	if err != nil {
-		result += fmt.Sprintf("%-30s", "读取失败")
+		result += fmt.Sprintf("%-30s", localizedText(language, "读取失败", "Read failed"))
 	} else {
 		parsedResult := parseResultDD(tempText, blockCount)
 		loggerInsert(Logger, "读取测试结果解析: "+parsedResult)
 		if strings.TrimSpace(parsedResult) == "" {
-			parsedResult = "无法解析结果"
+			parsedResult = localizedText(language, "无法解析结果", "Unable to parse result")
 		}
 		result += fmt.Sprintf("%-30s", parsedResult)
 	}

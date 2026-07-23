@@ -199,14 +199,36 @@ func main() {
 	case "fio":
 		res = disk.FioTest(language, isMultiCheck, testPath)
 		if res == "" {
-			res = "Fio test failed, switching to DD for testing.\n"
-			res += disk.DDTest(language, isMultiCheck, testPath)
+			fallback := disk.DDTest(language, isMultiCheck, testPath)
+			if fallback != "" {
+				if language == "en" {
+					res = "Fio test unavailable, switched to DD.\n"
+				} else {
+					res = "Fio测试不可用，已切换至DD测试。\n"
+				}
+				res += fallback
+			} else if language == "en" {
+				res = "Disk benchmark unavailable.\n"
+			} else {
+				res = "磁盘性能测试不可用。\n"
+			}
 		}
 	case "dd":
 		res = disk.DDTest(language, isMultiCheck, testPath)
 		if res == "" {
-			res = "DD test failed, switching to Fio for testing.\n"
-			res += disk.FioTest(language, isMultiCheck, testPath)
+			fallback := disk.FioTest(language, isMultiCheck, testPath)
+			if fallback != "" {
+				if language == "en" {
+					res = "DD test unavailable, switched to Fio.\n"
+				} else {
+					res = "DD测试不可用，已切换至Fio测试。\n"
+				}
+				res += fallback
+			} else if language == "en" {
+				res = "Disk benchmark unavailable.\n"
+			} else {
+				res = "磁盘性能测试不可用。\n"
+			}
 		}
 	default:
 		if runtime.GOOS == "windows" {

@@ -1,6 +1,7 @@
 package disk
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,11 +10,28 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+	"unicode"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/oneclickvirt/fio"
 	"go.uber.org/zap"
 )
+
+func sleepContext(ctx context.Context, duration time.Duration) bool {
+	if ctx == nil {
+		time.Sleep(duration)
+		return true
+	}
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
 
 var (
 	Logger         = zap.NewNop()
@@ -45,6 +63,44 @@ func loggerInsert(Logger *zap.Logger, st string) {
 	if EnableLoger && Logger != nil {
 		Logger.Info(st)
 	}
+}
+
+func localizedText(language, zh, en string) string {
+	if strings.EqualFold(strings.TrimSpace(language), "en") {
+		return en
+	}
+	return zh
+}
+
+// renderLegacyResults treats only parsed rows as a successful benchmark. This
+// keeps an empty parser result from producing a header-only table and allows
+// callers to fall back to the other disk benchmark method.
+func renderLegacyResults(language string, resultBlocks []string, header func(string, []string) string) string {
+	nonEmpty := make([]string, 0, len(resultBlocks))
+	paths := make([]string, 0, len(resultBlocks))
+	seenPaths := make(map[string]struct{})
+	for _, block := range resultBlocks {
+		if strings.TrimSpace(block) == "" {
+			continue
+		}
+		nonEmpty = append(nonEmpty, block)
+		for _, line := range strings.Split(block, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			path := fields[0]
+			if _, exists := seenPaths[path]; exists {
+				continue
+			}
+			seenPaths[path] = struct{}{}
+			paths = append(paths, path)
+		}
+	}
+	if len(nonEmpty) == 0 {
+		return ""
+	}
+	return header(language, paths) + strings.Join(nonEmpty, "")
 }
 
 func splitCommand(cmd string) []string {
@@ -162,10 +218,8 @@ func parseResultDD(tempText, blockCount string) string {
 				if len(timeParts) >= 1 {
 					usageTime, _ = strconv.ParseFloat(timeParts[0], 64)
 				}
-				speedParts := strings.Split(speedStr, " ")
-				if len(speedParts) >= 2 {
-					ioSpeed := speedParts[0]
-					ioSpeedFlat := speedParts[1]
+				ioSpeed, ioSpeedFlat, ok := splitSpeedAndUnit(speedStr)
+				if ok && usageTime > 0 {
 					iops := records / usageTime
 					var iopsText string
 					if iops >= 1000 {
@@ -179,6 +233,19 @@ func parseResultDD(tempText, blockCount string) string {
 		}
 	}
 	return result
+}
+
+func splitSpeedAndUnit(value string) (speed, unit string, ok bool) {
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) >= 2 {
+		return fields[0], fields[1], true
+	}
+	compact := strings.TrimSpace(value)
+	index := strings.IndexFunc(compact, unicode.IsLetter)
+	if index <= 0 {
+		return "", "", false
+	}
+	return compact[:index], compact[index:], true
 }
 
 // formatIOPS 转换fio的测试中的IOPS的值
