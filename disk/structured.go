@@ -147,22 +147,22 @@ func ParseFioJSON(data []byte, scenarioID string) ([]FioMetrics, error) {
 }
 
 func RunStandardFioMatrix(ctx context.Context, config MatrixConfig) (result MatrixResult) {
-	return runFioMatrix(ctx, config, StandardFioScenarios(), 60*time.Second)
+	return runFioMatrix(ctx, config, StandardFioScenarios())
 }
 
 func RunDeepFioMatrix(ctx context.Context, config MatrixConfig) (result MatrixResult) {
-	return runFioMatrix(ctx, config, DeepFioScenarios(), 3*time.Minute)
+	return runFioMatrix(ctx, config, DeepFioScenarios())
 }
 
-func runFioMatrix(ctx context.Context, config MatrixConfig, scenarios []FioScenario, maximumDuration time.Duration) (result MatrixResult) {
-	return runFioMatrixWithProvider(ctx, config, scenarios, maximumDuration, findFIO)
+func runFioMatrix(ctx context.Context, config MatrixConfig, scenarios []FioScenario) (result MatrixResult) {
+	return runFioMatrixWithProvider(ctx, config, scenarios, findFIO)
 }
 
-func runFioMatrixWithProvider(ctx context.Context, config MatrixConfig, scenarios []FioScenario, maximumDuration time.Duration, provider fioProvider) (result MatrixResult) {
-	return runFioMatrixWithDeps(ctx, config, scenarios, maximumDuration, provider, runFIOCommand)
+func runFioMatrixWithProvider(ctx context.Context, config MatrixConfig, scenarios []FioScenario, provider fioProvider) (result MatrixResult) {
+	return runFioMatrixWithDeps(ctx, config, scenarios, provider, runFIOCommand)
 }
 
-func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []FioScenario, maximumDuration time.Duration, provider fioProvider, runner fioCommandRunner) (result MatrixResult) {
+func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []FioScenario, provider fioProvider, runner fioCommandRunner) (result MatrixResult) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -181,25 +181,24 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 	if config.SizeBytes > 2<<30 {
 		config.SizeBytes = 2 << 30
 	}
-	if config.Runtime <= 0 {
-		config.Runtime = 5 * time.Second
-	}
-	if config.Runtime > 10*time.Second {
-		config.Runtime = 10 * time.Second
+	if config.Runtime < 0 {
+		config.Runtime = 0
 	}
 	if len(scenarios) == 0 {
 		return MatrixResult{SchemaVersion: "goecs.disk/v1", Status: "unavailable", Error: "fio scenario list is empty"}
 	}
-	if maximumDuration <= 0 {
-		maximumDuration = 60 * time.Second
-	}
-	if config.MaxDuration <= 0 || config.MaxDuration > maximumDuration {
-		config.MaxDuration = maximumDuration
-	}
+	// A zero MaxDuration means that the caller owns the deadline. The public
+	// matrix helpers intentionally do not impose a short method-specific cap;
+	// RunAllTests supplies the global context, while standalone callers can
+	// opt into a per-matrix deadline explicitly.
 	result = MatrixResult{SchemaVersion: "goecs.disk/v1", Status: "ok"}
 	started := time.Now()
 	defer func() { result.DurationMS = time.Since(started).Milliseconds() }()
-	matrixCtx, cancel := context.WithTimeout(ctx, config.MaxDuration)
+	matrixCtx := ctx
+	cancel := func() {}
+	if config.MaxDuration > 0 {
+		matrixCtx, cancel = context.WithTimeout(ctx, config.MaxDuration)
+	}
 	defer cancel()
 	if err := matrixCtx.Err(); err != nil {
 		result.Status, result.Error = matrixStopStatus(err), stableMatrixError(err)
@@ -235,9 +234,11 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 		return result
 	}
 	perScenarioRuntime := config.Runtime
-	maximumPerScenario := config.MaxDuration / time.Duration(len(scenarios))
-	if perScenarioRuntime > maximumPerScenario {
-		perScenarioRuntime = maximumPerScenario
+	if config.MaxDuration > 0 {
+		maximumPerScenario := config.MaxDuration / time.Duration(len(scenarios))
+		if perScenarioRuntime > maximumPerScenario {
+			perScenarioRuntime = maximumPerScenario
+		}
 	}
 	ioEngine := selectMatrixIOEngine(matrixCtx, acquired.Command, config.Path, runner)
 	for _, scenario := range scenarios {
@@ -251,9 +252,11 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 			"--name="+scenario.ID, "--ioengine="+ioEngine, "--rw="+scenario.RW,
 			"--bs="+scenario.BlockSize, fmt.Sprintf("--iodepth=%d", scenario.QueueDepth),
 			fmt.Sprintf("--numjobs=%d", scenario.Jobs), fmt.Sprintf("--size=%d", config.SizeBytes),
-			fmt.Sprintf("--runtime=%d", max(int(perScenarioRuntime.Seconds()), 1)), "--time_based=1",
 			"--direct=1", "--filename="+testPath, "--group_reporting=1", "--output-format=json",
 		)
+		if perScenarioRuntime > 0 {
+			args = append(args, fmt.Sprintf("--runtime=%d", max(int(perScenarioRuntime.Seconds()), 1)), "--time_based=1")
+		}
 		command = append(command, args...)
 		output, runErr := runner(matrixCtx, command)
 		if runErr != nil {

@@ -25,7 +25,7 @@ func generateDDTestHeader(language string, actualTestPaths []string) string {
 		}
 	}
 	var header string
-	if language == "en" {
+	if strings.EqualFold(strings.TrimSpace(language), "en") {
 		header = fmt.Sprintf("%-*s    %-15s    %-27s    %-27s\n",
 			mountPointsWidth, "Test Path",
 			"Block Size",

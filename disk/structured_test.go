@@ -105,7 +105,7 @@ func TestRunFioMatrixCancelsContextAwareProvider(t *testing.T) {
 	go func() {
 		resultChannel <- runFioMatrixWithProvider(ctx, MatrixConfig{
 			Path: directory, SizeBytes: 16 << 20, MaxDuration: time.Minute,
-		}, StandardFioScenarios(), time.Minute, provider)
+		}, StandardFioScenarios(), provider)
 	}()
 	<-started
 	cancel()
@@ -132,7 +132,7 @@ func TestRunFioMatrixReportsDeadlineWhileProviderBlocks(t *testing.T) {
 	go func() {
 		resultChannel <- runFioMatrixWithProvider(context.Background(), MatrixConfig{
 			Path: directory, SizeBytes: 16 << 20, MaxDuration: 20 * time.Millisecond,
-		}, StandardFioScenarios(), time.Minute, provider)
+		}, StandardFioScenarios(), provider)
 	}()
 	<-providerStarted
 	select {
@@ -142,6 +142,72 @@ func TestRunFioMatrixReportsDeadlineWhileProviderBlocks(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("blocked fio provider exceeded matrix deadline")
+	}
+	assertDirectoryEmpty(t, directory)
+}
+
+func TestRunFioMatrixWithoutMethodLimitsUsesCallerContext(t *testing.T) {
+	directory := t.TempDir()
+	provider := func(context.Context) (fioAcquisition, error) {
+		return fioAcquisition{Command: []string{"fixture-fio"}}, nil
+	}
+	var matrixCommand []string
+	runner := func(ctx context.Context, command []string) ([]byte, error) {
+		if _, hasDeadline := ctx.Deadline(); hasDeadline {
+			t.Fatal("zero MaxDuration unexpectedly added a method deadline")
+		}
+		if commandArgument(command, "--name=") == "engine-check" {
+			return nil, nil
+		}
+		matrixCommand = append([]string(nil), command...)
+		return []byte(`{"jobs":[{"read":{"bw_bytes":1048576,"iops":256,"clat_ns":{"percentile":{"50.000000":1000,"95.000000":2000,"99.000000":3000}}}}]}`), nil
+	}
+
+	result := runFioMatrixWithDeps(context.Background(), MatrixConfig{
+		Path: directory, SizeBytes: 16 << 20,
+	}, []FioScenario{{ID: "fixture-read", RW: "read", BlockSize: "4k", QueueDepth: 1, Jobs: 1}}, provider, runner)
+	if result.Status != "ok" || len(result.Metrics) != 1 {
+		t.Fatalf("unexpected unlimited matrix result: %+v", result)
+	}
+	if commandArgument(matrixCommand, "--runtime=") != "" {
+		t.Fatalf("zero Runtime added --runtime: %#v", matrixCommand)
+	}
+	for _, argument := range matrixCommand {
+		if argument == "--time_based=1" {
+			t.Fatalf("zero Runtime added --time_based: %#v", matrixCommand)
+		}
+	}
+	assertDirectoryEmpty(t, directory)
+}
+
+func TestRunFioMatrixExplicitRuntimeRemainsAvailable(t *testing.T) {
+	directory := t.TempDir()
+	provider := func(context.Context) (fioAcquisition, error) {
+		return fioAcquisition{Command: []string{"fixture-fio"}}, nil
+	}
+	var matrixCommand []string
+	runner := func(_ context.Context, command []string) ([]byte, error) {
+		if commandArgument(command, "--name=") == "engine-check" {
+			return nil, nil
+		}
+		matrixCommand = append([]string(nil), command...)
+		return []byte(`{"jobs":[{"read":{"bw_bytes":1048576,"iops":256}}]}`), nil
+	}
+
+	result := runFioMatrixWithDeps(context.Background(), MatrixConfig{
+		Path: directory, SizeBytes: 16 << 20, Runtime: 3 * time.Second,
+	}, []FioScenario{{ID: "fixture-read", RW: "read", BlockSize: "4k", QueueDepth: 1, Jobs: 1}}, provider, runner)
+	if result.Status != "ok" || commandArgument(matrixCommand, "--runtime=") != "3" {
+		t.Fatalf("explicit runtime was not preserved: result=%+v command=%#v", result, matrixCommand)
+	}
+	foundTimeBased := false
+	for _, argument := range matrixCommand {
+		if argument == "--time_based=1" {
+			foundTimeBased = true
+		}
+	}
+	if !foundTimeBased {
+		t.Fatalf("explicit Runtime omitted --time_based: %#v", matrixCommand)
 	}
 	assertDirectoryEmpty(t, directory)
 }
@@ -234,7 +300,7 @@ func TestRunFioMatrixCleansRegularTestAndEngineProbeFiles(t *testing.T) {
 
 	result := runFioMatrixWithDeps(context.Background(), MatrixConfig{
 		Path: directory, SizeBytes: 16 << 20, Runtime: time.Second, MaxDuration: 5 * time.Second,
-	}, []FioScenario{{ID: "fixture-read", RW: "read", BlockSize: "4k", QueueDepth: 1, Jobs: 1}}, time.Minute, provider, runner)
+	}, []FioScenario{{ID: "fixture-read", RW: "read", BlockSize: "4k", QueueDepth: 1, Jobs: 1}}, provider, runner)
 	if result.Status != "ok" || len(result.Metrics) != 1 {
 		t.Fatalf("unexpected fixture result: %+v", result)
 	}
@@ -301,7 +367,7 @@ func TestRunFioMatrixCancellationStopsProbeAndCleansFiles(t *testing.T) {
 			go func() {
 				resultChannel <- runFioMatrixWithDeps(ctx, MatrixConfig{
 					Path: directory, SizeBytes: 16 << 20, Runtime: time.Second, MaxDuration: time.Minute,
-				}, StandardFioScenarios(), time.Minute, provider, runner)
+				}, StandardFioScenarios(), provider, runner)
 			}()
 			<-started
 			if testCase.wantStatus == "canceled" {
@@ -337,7 +403,7 @@ func TestRunFioMatrixCleansProviderAfterAcquisitionError(t *testing.T) {
 	var cleanupCalls atomic.Int32
 	result := runFioMatrixWithProvider(context.Background(), MatrixConfig{
 		Path: t.TempDir(), SizeBytes: 16 << 20, MaxDuration: time.Second,
-	}, StandardFioScenarios(), time.Minute, func(context.Context) (fioAcquisition, error) {
+	}, StandardFioScenarios(), func(context.Context) (fioAcquisition, error) {
 		return fioAcquisition{Cleanup: func() error {
 			cleanupCalls.Add(1)
 			return nil

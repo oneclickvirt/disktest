@@ -103,6 +103,20 @@ func renderLegacyResults(language string, resultBlocks []string, header func(str
 	return header(language, paths) + strings.Join(nonEmpty, "")
 }
 
+// LegacyResultUsable reports whether classic DD/FIO text contains at least
+// one measured transfer rate. Headers and localized error-only rows are not
+// benchmark results and must not prevent the caller from trying the fallback
+// method.
+func LegacyResultUsable(output string) bool {
+	normalized := strings.ToLower(output)
+	for _, unit := range []string{"kb/s", "mb/s", "gb/s", "tb/s", "kib/s", "mib/s", "gib/s", "tib/s"} {
+		if strings.Contains(normalized, unit) {
+			return true
+		}
+	}
+	return false
+}
+
 func splitCommand(cmd string) []string {
 	parts := strings.Fields(strings.TrimSpace(cmd))
 	return parts

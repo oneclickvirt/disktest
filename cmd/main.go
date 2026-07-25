@@ -25,6 +25,15 @@ type cliOptions struct {
 	runtimeSet                            bool
 }
 
+type legacyDiskTest func(string, bool, string) string
+
+// Keep the legacy method functions replaceable in tests so fallback behavior
+// can be verified without touching a real disk or invoking fio/dd.
+var (
+	legacyFioTest legacyDiskTest = disk.FioTest
+	legacyDDTest  legacyDiskTest = disk.DDTest
+)
+
 func parseCLI(args []string) (cliOptions, error) {
 	opts := cliOptions{}
 	fs := newFlagSet(&opts, io.Discard)
@@ -78,15 +87,11 @@ func parseCLI(args []string) (cliOptions, error) {
 		if opts.languageSet || opts.methodSet || opts.multiDiskSet {
 			return opts, fmt.Errorf("-l, -m, and -d are not used with structured output")
 		}
-		if opts.runtimeSet && (opts.runtime <= 0 || opts.runtime > 10*time.Second) {
-			return opts, fmt.Errorf("structured duration must be greater than zero and at most 10s")
+		if opts.runtimeSet && opts.runtime < 0 {
+			return opts, fmt.Errorf("structured duration must not be negative")
 		}
-		maximum := 60 * time.Second
-		if opts.deep {
-			maximum = 3 * time.Minute
-		}
-		if opts.timeoutSet && (opts.timeout <= 0 || opts.timeout > maximum) {
-			return opts, fmt.Errorf("structured timeout is outside the supported range")
+		if opts.timeoutSet && opts.timeout < 0 {
+			return opts, fmt.Errorf("structured timeout must not be negative")
 		}
 		if opts.sizeSet && (opts.sizeBytes < 16<<20 || opts.sizeBytes > 2<<30) {
 			return opts, fmt.Errorf("structured size must be between 16 MiB and 2 GiB")
@@ -110,8 +115,8 @@ func newFlagSet(opts *cliOptions, output io.Writer) *flag.FlagSet {
 	fs.BoolVar(&opts.jsonOutput, "json", false, "Print the Go structured FIO result as JSON")
 	fs.BoolVar(&opts.jsonOutput, "structured", false, "Print the Go structured FIO result as JSON")
 	fs.BoolVar(&opts.deep, "deep", false, "Run the explicit deep FIO matrix")
-	fs.DurationVar(&opts.runtime, "duration", 0, "Per-scenario FIO runtime (for example 5s)")
-	fs.DurationVar(&opts.timeout, "timeout", 0, "FIO matrix timeout (for example 60s)")
+	fs.DurationVar(&opts.runtime, "duration", 0, "Per-scenario FIO runtime; 0 runs the configured data size")
+	fs.DurationVar(&opts.timeout, "timeout", 0, "FIO matrix timeout; 0 uses the caller deadline only")
 	fs.Int64Var(&opts.sizeBytes, "size", 0, "Temporary test-file size in bytes")
 	return fs
 }
@@ -197,39 +202,9 @@ func main() {
 	}
 	switch testMethod {
 	case "fio":
-		res = disk.FioTest(language, isMultiCheck, testPath)
-		if res == "" {
-			fallback := disk.DDTest(language, isMultiCheck, testPath)
-			if fallback != "" {
-				if language == "en" {
-					res = "Fio test unavailable, switched to DD.\n"
-				} else {
-					res = "Fio测试不可用，已切换至DD测试。\n"
-				}
-				res += fallback
-			} else if language == "en" {
-				res = "Disk benchmark unavailable.\n"
-			} else {
-				res = "磁盘性能测试不可用。\n"
-			}
-		}
+		res = runLegacyDiskFallback(language, isMultiCheck, testPath, legacyFioTest, legacyDDTest, "Fio测试不可用，已切换至DD测试。", "Fio test unavailable, switched to DD.")
 	case "dd":
-		res = disk.DDTest(language, isMultiCheck, testPath)
-		if res == "" {
-			fallback := disk.FioTest(language, isMultiCheck, testPath)
-			if fallback != "" {
-				if language == "en" {
-					res = "DD test unavailable, switched to Fio.\n"
-				} else {
-					res = "DD测试不可用，已切换至Fio测试。\n"
-				}
-				res += fallback
-			} else if language == "en" {
-				res = "Disk benchmark unavailable.\n"
-			} else {
-				res = "磁盘性能测试不可用。\n"
-			}
-		}
+		res = runLegacyDiskFallback(language, isMultiCheck, testPath, legacyDDTest, legacyFioTest, "DD测试不可用，已切换至Fio测试。", "DD test unavailable, switched to Fio.")
 	default:
 		if runtime.GOOS == "windows" {
 			res = "Detected host is Windows, using Winsat for testing.\n"
@@ -246,6 +221,38 @@ func main() {
 		fmt.Println("Press Enter to exit...")
 		fmt.Scanln()
 	}
+}
+
+func runLegacyDiskFallback(language string, multiDisk bool, testPath string, primary, fallback legacyDiskTest, switchedChinese, switchedEnglish string) string {
+	primaryResult := primary(language, multiDisk, testPath)
+	if disk.LegacyResultUsable(primaryResult) {
+		return primaryResult
+	}
+	fallbackResult := fallback(language, multiDisk, testPath)
+	if disk.LegacyResultUsable(fallbackResult) {
+		if strings.EqualFold(strings.TrimSpace(language), "en") {
+			return switchedEnglish + "\n" + fallbackResult
+		}
+		return switchedChinese + "\n" + fallbackResult
+	}
+	return failedLegacyDiskText(language, primaryResult, fallbackResult)
+}
+
+func failedLegacyDiskText(language string, outputs ...string) string {
+	var retained string
+	for _, output := range outputs {
+		if strings.TrimSpace(output) != "" {
+			retained = output
+			break
+		}
+	}
+	if retained != "" && !strings.HasSuffix(retained, "\n") {
+		retained += "\n"
+	}
+	if strings.EqualFold(strings.TrimSpace(language), "en") {
+		return retained + "DD and FIO returned no usable benchmark data.\n"
+	}
+	return retained + "DD和FIO均未返回可用的性能数据。\n"
 }
 
 func printLegacyHeader() {

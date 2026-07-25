@@ -4,7 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 type MultiPathResult struct {
@@ -18,6 +17,12 @@ func RunDeepMultiPathMatrix(ctx context.Context, paths []string, config MatrixCo
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	matrixCtx := ctx
+	cancel := func() {}
+	if config.MaxDuration > 0 {
+		matrixCtx, cancel = context.WithTimeout(ctx, config.MaxDuration)
+	}
+	defer cancel()
 	result := MultiPathResult{SchemaVersion: "goecs.disk/deep-multi-v1", Status: "skipped", Paths: []MatrixResult{}}
 	seen := make(map[string]struct{})
 	for _, path := range paths {
@@ -29,14 +34,14 @@ func RunDeepMultiPathMatrix(ctx context.Context, paths []string, config MatrixCo
 			continue
 		}
 		seen[absolute] = struct{}{}
-		if err := ctx.Err(); err != nil {
+		if err := matrixCtx.Err(); err != nil {
 			result.Status, result.Error = matrixStopStatus(err), stableMatrixError(err)
 			return result
 		}
 		pathConfig := config
 		pathConfig.Path = absolute
-		pathConfig.MaxDuration = min(config.MaxDuration, 3*time.Minute)
-		result.Paths = append(result.Paths, RunDeepFioMatrix(ctx, pathConfig))
+		pathConfig.MaxDuration = 0
+		result.Paths = append(result.Paths, RunDeepFioMatrix(matrixCtx, pathConfig))
 	}
 	if len(result.Paths) == 0 {
 		result.Error = "no explicit deep disk paths configured"

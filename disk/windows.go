@@ -13,7 +13,7 @@ func WinsatTest(language string, enableMultiCheck bool, testPath string) string 
 	var result string
 	parts, err := disk.Partitions(true)
 	if err == nil {
-		if language == "en" {
+		if strings.EqualFold(strings.TrimSpace(language), "en") {
 			result += "Test Disk               Random Read[Score]       Sequential Read[Score]  Sequential Write[Score]\n"
 		} else {
 			result += "测试的硬盘                随机写入[得分]            顺序读取[得分]            顺序写入[得分]\n"

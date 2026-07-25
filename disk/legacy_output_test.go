@@ -40,12 +40,57 @@ func TestProcessFioOutputRejectsNonResultOutput(t *testing.T) {
 	}
 }
 
+func TestLegacyFioArgsRunToConfiguredDataSize(t *testing.T) {
+	for _, buffered := range []bool{false, true} {
+		args := legacyFioArgs("libaio", "4k", "1G", "/tmp/test.fio", buffered)
+		joined := strings.Join(args, " ")
+		if strings.Contains(joined, "--runtime=") || strings.Contains(joined, "--time_based") {
+			t.Fatalf("legacy FIO still has a fixed runtime: %q", joined)
+		}
+		wantDirect := "--direct=1"
+		if buffered {
+			wantDirect = "--direct=0"
+		}
+		if !strings.Contains(joined, wantDirect) {
+			t.Fatalf("legacy FIO direct mode missing %q: %q", wantDirect, joined)
+		}
+	}
+}
+
 func TestLocalizedTextUsesEnglishForNormalizedLanguage(t *testing.T) {
 	if got := localizedText(" EN ", "写入失败", "Write failed"); got != "Write failed" {
 		t.Fatalf("localized text = %q", got)
 	}
 	if got := localizedText("zh", "写入失败", "Write failed"); got != "写入失败" {
 		t.Fatalf("localized text = %q", got)
+	}
+}
+
+func TestLegacyResultUsableRequiresMeasuredTransferRate(t *testing.T) {
+	for _, output := range []string{
+		"", "Test Path Block Direct Write(IOPS) Direct Read(IOPS)\n",
+		"Unable to create test path\n", "/ 4k Write failed Read failed\n",
+	} {
+		if LegacyResultUsable(output) {
+			t.Fatalf("failure-only legacy output was considered usable: %q", output)
+		}
+	}
+	for _, output := range []string{
+		"/ 4k 12.3 MB/s(1) 9.8 MB/s(2)\n",
+		"/ 4k Write failed 1.2 GiB/s(2)\n",
+	} {
+		if !LegacyResultUsable(output) {
+			t.Fatalf("measured legacy output was rejected: %q", output)
+		}
+	}
+}
+
+func TestLegacyHeadersUseNormalizedEnglish(t *testing.T) {
+	if got := generateFioTestHeader(" EN ", nil); !strings.Contains(got, "Test Path") {
+		t.Fatalf("normalized English FIO header = %q", got)
+	}
+	if got := generateDDTestHeader(" EN ", nil); !strings.Contains(got, "Test Path") {
+		t.Fatalf("normalized English DD header = %q", got)
 	}
 }
 

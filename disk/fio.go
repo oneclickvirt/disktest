@@ -25,7 +25,7 @@ func generateFioTestHeader(language string, actualTestPaths []string) string {
 		}
 	}
 	var header string
-	if language == "en" {
+	if strings.EqualFold(strings.TrimSpace(language), "en") {
 		header = fmt.Sprintf("%-*s   %-7s   %-20s %-20s %-20s\n",
 			mountPointsWidth, "Test Path",
 			"Block",
@@ -378,54 +378,11 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	var firstErr error
 	for _, BS := range blockSizes {
 		loggerInsert(Logger, "开始测试块大小: "+BS)
-		var args []string
-		if commandExists("timeout") {
-			args = append(args, "35")
-		}
-		var fioArgs []string
-		if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-			fioArgs = []string{
-				"--name=rand_rw_" + BS,
-				"--ioengine=" + ioEngine,
-				"--rw=randrw",
-				"--rwmixread=50",
-				"--bs=" + BS,
-				"--iodepth=64",
-				"--numjobs=2",
-				"--size=" + fioSize,
-				"--runtime=30",
-				"--direct=0",
-				"--filename=" + testFilePath,
-				"--group_reporting",
-				"--minimal",
-			}
-		} else {
-			fioArgs = []string{
-				"--name=rand_rw_" + BS,
-				"--ioengine=" + ioEngine,
-				"--rw=randrw",
-				"--rwmixread=50",
-				"--bs=" + BS,
-				"--iodepth=64",
-				"--numjobs=2",
-				"--size=" + fioSize,
-				"--runtime=30",
-				"--gtod_reduce=1",
-				"--direct=1",
-				"--filename=" + testFilePath,
-				"--group_reporting",
-				"--minimal",
-			}
-		}
+		fioArgs := legacyFioArgs(ioEngine, BS, fioSize, testFilePath, runtime.GOOS == "darwin" || runtime.GOOS == "windows")
 		var output []byte
 		var runErr error
-		if commandExists("timeout") && runtime.GOOS != "windows" {
-			cmd2 := exec.Command("timeout", append(args, append(baseArgs, fioArgs...)...)...)
-			output, runErr = cmd2.CombinedOutput()
-		} else {
-			cmd2 := exec.Command(baseArgs[0], append(baseArgs[1:], fioArgs...)...)
-			output, runErr = cmd2.CombinedOutput()
-		}
+		cmd2 := exec.Command(baseArgs[0], append(baseArgs[1:], fioArgs...)...)
+		output, runErr = cmd2.CombinedOutput()
 		parsed := processFioOutput(string(output), BS, devicename)
 		if parsed != "" {
 			result += parsed
@@ -452,6 +409,31 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 		}
 	}
 	return result, firstErr
+}
+
+func legacyFioArgs(ioEngine, blockSize, fioSize, testFilePath string, buffered bool) []string {
+	direct := "--direct=1"
+	args := []string{
+		"--name=rand_rw_" + blockSize,
+		"--ioengine=" + ioEngine,
+		"--rw=randrw",
+		"--rwmixread=50",
+		"--bs=" + blockSize,
+		"--iodepth=64",
+		"--numjobs=2",
+		"--size=" + fioSize,
+	}
+	if buffered {
+		direct = "--direct=0"
+	} else {
+		args = append(args, "--gtod_reduce=1")
+	}
+	return append(args,
+		direct,
+		"--filename="+testFilePath,
+		"--group_reporting",
+		"--minimal",
+	)
 }
 
 // processFioOutput 处理fio输出结果
