@@ -66,7 +66,10 @@ func DDTestContext(ctx context.Context, language string, enableMultiCheck bool, 
 		if EnableLoger {
 			Logger.Info("DDTest err: " + err.Error())
 		}
-		return ""
+	}
+	if enableMultiCheck && testPath == "" && len(pathInfo.MountPoints) == 0 {
+		rootPath, tmpPath := getDefaultTestPaths()
+		pathInfo = ensureLegacyTestPaths(pathInfo, rootPath, tmpPath)
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
@@ -287,13 +290,17 @@ func execDDTestContext(ctx context.Context, ifKey, ofKey, bs, blockCount string)
 		return "", fmt.Errorf("execDDTest: ddCmd is NULL")
 	}
 	loggerInsert(Logger, fmt.Sprintf("执行DD命令: %s, if=%s, of=%s, bs=%s, count=%s", ddCmd, ifKey, ofKey, bs, blockCount))
-	parts := strings.Split(ddCmd, " ")
-	args := append(parts[1:], "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount)
-	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		args = append(args, "oflag=direct")
+	executable, commandArgs, err := normalizeDDCommand(ddCmd)
+	if err != nil {
+		loggerInsert(Logger, "DD命令无效: "+err.Error())
+		return "", err
 	}
-	loggerInsert(Logger, fmt.Sprintf("完整命令参数: %s %s", parts[0], strings.Join(args, " ")))
-	cmd2 := exec.CommandContext(ctx, parts[0], args...)
+	args := append(commandArgs, "if="+ifKey, "of="+ofKey, "bs="+bs, "count="+blockCount)
+	if directFlag := ddDirectIOFlag(runtime.GOOS, ifKey, getDevZeroPath()); directFlag != "" {
+		args = append(args, directFlag)
+	}
+	loggerInsert(Logger, fmt.Sprintf("完整命令参数: %s %s", executable, strings.Join(args, " ")))
+	cmd2 := exec.CommandContext(ctx, executable, args...)
 	outputBytes, err := cmd2.CombinedOutput()
 	if err != nil {
 		loggerInsert(Logger, "DD命令执行失败: "+err.Error())
@@ -318,6 +325,27 @@ func execDDTestContext(ctx context.Context, ifKey, ofKey, bs, blockCount string)
 		}
 	}
 	return tempText, nil
+}
+
+func normalizeDDCommand(command string) (string, []string, error) {
+	parts := splitCommand(command)
+	if len(parts) > 0 && strings.EqualFold(filepath.Base(parts[0]), "sudo") {
+		parts = parts[1:]
+	}
+	if len(parts) == 0 {
+		return "", nil, fmt.Errorf("dd command is empty")
+	}
+	return parts[0], append([]string(nil), parts[1:]...), nil
+}
+
+func ddDirectIOFlag(goos, inputPath, zeroPath string) string {
+	if goos == "windows" || goos == "darwin" {
+		return ""
+	}
+	if inputPath == zeroPath {
+		return "oflag=direct"
+	}
+	return "iflag=direct"
 }
 
 // ddTest1 无重试机制

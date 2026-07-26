@@ -83,7 +83,6 @@ func containsMountPoint(mountPoints []string, mountPoint string) bool {
 
 // getTestPaths 获取可用的测试路径,返回设备和挂载点列表
 func getTestPaths() (TestPathInfo, error) {
-	var pathInfo TestPathInfo
 	parts, err := disk.Partitions(false)
 	if EnableLoger {
 		InitLogger()
@@ -93,58 +92,83 @@ func getTestPaths() (TestPathInfo, error) {
 			Logger.Info("路径: " + part.Mountpoint + ", 设备: " + part.Device + ", 文件系统: " + part.Fstype)
 		}
 	}
-	if err == nil {
-		for _, f := range parts {
-			fsType := strings.ToLower(f.Fstype)
-			// 检查文件系统类型是否应该被排除
-			if shouldExcludeFsType(fsType) {
-				loggerInsert(Logger, "排除文件系统类型: "+f.Fstype+", 设备: "+f.Device+", 挂载点: "+f.Mountpoint)
-				continue
-			}
-			// 检查挂载点是否应该被排除
-			if shouldExcludeMountPoint(f.Mountpoint) {
-				loggerInsert(Logger, "排除挂载点: "+f.Mountpoint+", 设备: "+f.Device)
-				continue
-			}
-			// 设备过滤逻辑
-			if strings.Contains(f.Device, "vda") ||
-				strings.Contains(f.Device, "snap") ||
-				strings.Contains(f.Device, "loop") {
-				loggerInsert(Logger, "排除设备类型: "+f.Device+", 挂载点: "+f.Mountpoint)
-				continue
-			}
-			// 优先选择期望的文件系统类型
-			if isExpectedFsType(fsType) {
-				if isWritableMountpoint(f.Mountpoint) {
-					// 检查挂载点是否已存在，避免重复添加
-					if !containsMountPoint(pathInfo.MountPoints, f.Mountpoint) {
-						pathInfo.Devices = append(pathInfo.Devices, f.Device)
-						pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
-						loggerInsert(Logger, "添加期望文件系统可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
-					} else {
-						loggerInsert(Logger, "跳过重复挂载点: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
-					}
+	if err != nil {
+		return TestPathInfo{}, err
+	}
+	return testPathsFromPartitions(parts), nil
+}
+
+func testPathsFromPartitions(parts []disk.PartitionStat) TestPathInfo {
+	var pathInfo TestPathInfo
+	for _, f := range parts {
+		fsType := strings.ToLower(f.Fstype)
+		// 检查文件系统类型是否应该被排除
+		if shouldExcludeFsType(fsType) {
+			loggerInsert(Logger, "排除文件系统类型: "+f.Fstype+", 设备: "+f.Device+", 挂载点: "+f.Mountpoint)
+			continue
+		}
+		// 检查挂载点是否应该被排除
+		if shouldExcludeMountPoint(f.Mountpoint) {
+			loggerInsert(Logger, "排除挂载点: "+f.Mountpoint+", 设备: "+f.Device)
+			continue
+		}
+		// 设备过滤逻辑
+		if strings.Contains(f.Device, "snap") ||
+			strings.Contains(f.Device, "loop") {
+			loggerInsert(Logger, "排除设备类型: "+f.Device+", 挂载点: "+f.Mountpoint)
+			continue
+		}
+		// 优先选择期望的文件系统类型
+		if isExpectedFsType(fsType) {
+			if isWritableMountpoint(f.Mountpoint) {
+				// 检查挂载点是否已存在，避免重复添加
+				if !containsMountPoint(pathInfo.MountPoints, f.Mountpoint) {
+					pathInfo.Devices = append(pathInfo.Devices, f.Device)
+					pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
+					loggerInsert(Logger, "添加期望文件系统可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 				} else {
-					loggerInsert(Logger, "期望文件系统但不可写: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					loggerInsert(Logger, "跳过重复挂载点: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 				}
 			} else {
-				// 其他文件系统类型，如果可写也加入
-				if isWritableMountpoint(f.Mountpoint) {
-					// 检查挂载点是否已存在，避免重复添加
-					if !containsMountPoint(pathInfo.MountPoints, f.Mountpoint) {
-						pathInfo.Devices = append(pathInfo.Devices, f.Device)
-						pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
-						loggerInsert(Logger, "添加其他可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
-					} else {
-						loggerInsert(Logger, "跳过重复挂载点: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
-					}
+				loggerInsert(Logger, "期望文件系统但不可写: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+			}
+		} else {
+			// 其他文件系统类型，如果可写也加入
+			if isWritableMountpoint(f.Mountpoint) {
+				// 检查挂载点是否已存在，避免重复添加
+				if !containsMountPoint(pathInfo.MountPoints, f.Mountpoint) {
+					pathInfo.Devices = append(pathInfo.Devices, f.Device)
+					pathInfo.MountPoints = append(pathInfo.MountPoints, f.Mountpoint)
+					loggerInsert(Logger, "添加其他可写分区: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 				} else {
-					loggerInsert(Logger, "其他文件系统但不可写: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
+					loggerInsert(Logger, "跳过重复挂载点: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 				}
+			} else {
+				loggerInsert(Logger, "其他文件系统但不可写: "+f.Mountpoint+", 设备: "+f.Device+", 文件系统: "+f.Fstype)
 			}
 		}
 	}
-	return pathInfo, err
+	return pathInfo
+}
+
+// ensureLegacyTestPaths prevents multi-disk mode from becoming a zero-target
+// benchmark when the partition API only exposes filtered container mounts or
+// no partitions at all. Normal discovered mounts always take precedence.
+func ensureLegacyTestPaths(pathInfo TestPathInfo, candidates ...string) TestPathInfo {
+	if len(pathInfo.MountPoints) > 0 {
+		return pathInfo
+	}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" || !isWritableMountpoint(candidate) {
+			continue
+		}
+		pathInfo.Devices = []string{candidate}
+		pathInfo.MountPoints = []string{candidate}
+		loggerInsert(Logger, "未发现可测试挂载点，回退到默认可写路径: "+candidate)
+		break
+	}
+	return pathInfo
 }
 
 // DiscoverTestPaths exposes the same writable mount discovery used by the

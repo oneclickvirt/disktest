@@ -2,9 +2,13 @@ package disk
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shirou/gopsutil/disk"
 )
 
 func TestRenderLegacyResultsDoesNotEmitHeaderForEmptyBlocks(t *testing.T) {
@@ -94,6 +98,37 @@ func TestLegacyHeadersUseNormalizedEnglish(t *testing.T) {
 	}
 }
 
+func TestVirtioPartitionIsKeptForMultiDiskBenchmarks(t *testing.T) {
+	mountPoint := t.TempDir()
+	parts := []disk.PartitionStat{{Device: "/dev/vda1", Mountpoint: mountPoint, Fstype: "ext4"}}
+
+	pathInfo := testPathsFromPartitions(parts)
+	if len(pathInfo.MountPoints) != 1 || pathInfo.MountPoints[0] != mountPoint || pathInfo.Devices[0] != "/dev/vda1" {
+		t.Fatalf("virtio root partition was filtered: %#v", pathInfo)
+	}
+}
+
+func TestEmptyMultiDiskDiscoveryFallsBackToFirstWritablePath(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	writable := t.TempDir()
+
+	pathInfo := ensureLegacyTestPaths(TestPathInfo{}, missing, writable)
+	if len(pathInfo.MountPoints) != 1 || pathInfo.MountPoints[0] != writable || pathInfo.Devices[0] != writable {
+		t.Fatalf("empty discovery did not use writable fallback: %#v", pathInfo)
+	}
+	if _, err := os.Stat(filepath.Join(writable, ".temp_write_check")); !os.IsNotExist(err) {
+		t.Fatalf("writability probe left a temporary file: %v", err)
+	}
+}
+
+func TestExistingMultiDiskDiscoveryDoesNotUseFallback(t *testing.T) {
+	original := TestPathInfo{Devices: []string{"/dev/sda1"}, MountPoints: []string{"/data"}}
+	got := ensureLegacyTestPaths(original, t.TempDir())
+	if len(got.MountPoints) != 1 || got.MountPoints[0] != "/data" || got.Devices[0] != "/dev/sda1" {
+		t.Fatalf("existing discovery was replaced: %#v", got)
+	}
+}
+
 func TestDDTestContextStopsBeforeStartingCanceledBenchmark(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -131,5 +166,27 @@ func TestParseResultDDBSDOutput(t *testing.T) {
 	got := parseResultDD("104857600 bytes transferred in 0.050 secs (2097152000 bytes/sec)", "25600")
 	if !strings.Contains(got, "GB/s") || !strings.Contains(got, "IOPS") {
 		t.Fatalf("BSD dd output was not parsed: %q", got)
+	}
+}
+
+func TestNormalizeDDCommandDoesNotRequireSudo(t *testing.T) {
+	executable, args, err := normalizeDDCommand("sudo /opt/bin/dd --status=none")
+	if err != nil {
+		t.Fatalf("normalizeDDCommand returned error: %v", err)
+	}
+	if executable != "/opt/bin/dd" || strings.Join(args, " ") != "--status=none" {
+		t.Fatalf("normalized command = %q %q", executable, args)
+	}
+}
+
+func TestDDDirectIOFlagUsesInputFlagForReads(t *testing.T) {
+	if got := ddDirectIOFlag("linux", "/dev/zero", "/dev/zero"); got != "oflag=direct" {
+		t.Fatalf("write direct flag = %q", got)
+	}
+	if got := ddDirectIOFlag("linux", "/tmp/test.file", "/dev/zero"); got != "iflag=direct" {
+		t.Fatalf("read direct flag = %q", got)
+	}
+	if got := ddDirectIOFlag("darwin", "/tmp/test.file", "/dev/zero"); got != "" {
+		t.Fatalf("darwin direct flag = %q", got)
 	}
 }

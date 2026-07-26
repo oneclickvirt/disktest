@@ -56,7 +56,10 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 		if EnableLoger {
 			Logger.Info("FioTest err: " + err.Error())
 		}
-		return ""
+	}
+	if enableMultiCheck && testPath == "" && len(pathInfo.MountPoints) == 0 {
+		rootPath, tmpPath := getDefaultTestPaths()
+		pathInfo = ensureLegacyTestPaths(pathInfo, rootPath, tmpPath)
 	}
 	devices := pathInfo.Devices
 	mountPoints := pathInfo.MountPoints
