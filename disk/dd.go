@@ -339,7 +339,7 @@ func normalizeDDCommand(command string) (string, []string, error) {
 }
 
 func ddDirectIOFlag(goos, inputPath, zeroPath string) string {
-	if goos == "windows" || goos == "darwin" {
+	if goos != "linux" {
 		return ""
 	}
 	if inputPath == zeroPath {

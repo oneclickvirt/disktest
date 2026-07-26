@@ -175,5 +175,13 @@ func ensureLegacyTestPaths(pathInfo TestPathInfo, candidates ...string) TestPath
 // standalone legacy CLI so orchestrators can run an equivalent multi-disk
 // matrix without duplicating platform-specific filtering.
 func DiscoverTestPaths() (TestPathInfo, error) {
-	return getTestPaths()
+	pathInfo, err := getTestPaths()
+	if len(pathInfo.MountPoints) == 0 {
+		rootPath, tmpPath := getDefaultTestPaths()
+		pathInfo = ensureLegacyTestPaths(pathInfo, rootPath, tmpPath)
+	}
+	if len(pathInfo.MountPoints) > 0 {
+		return pathInfo, nil
+	}
+	return pathInfo, err
 }

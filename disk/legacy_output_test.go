@@ -189,4 +189,7 @@ func TestDDDirectIOFlagUsesInputFlagForReads(t *testing.T) {
 	if got := ddDirectIOFlag("darwin", "/tmp/test.file", "/dev/zero"); got != "" {
 		t.Fatalf("darwin direct flag = %q", got)
 	}
+	if got := ddDirectIOFlag("openbsd", "/tmp/test.file", "/dev/zero"); got != "" {
+		t.Fatalf("openbsd direct flag = %q", got)
+	}
 }
