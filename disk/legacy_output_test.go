@@ -44,12 +44,12 @@ func TestProcessFioOutputRejectsNonResultOutput(t *testing.T) {
 	}
 }
 
-func TestLegacyFioArgsRunToConfiguredDataSize(t *testing.T) {
+func TestLegacyFioArgsUseBoundedWorkloadWithoutExternalTimeout(t *testing.T) {
 	for _, buffered := range []bool{false, true} {
-		args := legacyFioArgs("libaio", "4k", "1G", "/tmp/test.fio", buffered)
+		args := legacyFioArgs("libaio", "4k", "1G", "/tmp/test.fio", buffered, DefaultLegacyFioRuntime)
 		joined := strings.Join(args, " ")
-		if strings.Contains(joined, "--runtime=") || strings.Contains(joined, "--time_based") {
-			t.Fatalf("legacy FIO still has a fixed runtime: %q", joined)
+		if !strings.Contains(joined, "--runtime=30") || strings.Contains(joined, "--time_based") || strings.Contains(joined, "timeout") {
+			t.Fatalf("legacy FIO workload is not bounded as expected: %q", joined)
 		}
 		wantDirect := "--direct=1"
 		if buffered {
@@ -58,6 +58,13 @@ func TestLegacyFioArgsRunToConfiguredDataSize(t *testing.T) {
 		if !strings.Contains(joined, wantDirect) {
 			t.Fatalf("legacy FIO direct mode missing %q: %q", wantDirect, joined)
 		}
+	}
+}
+
+func TestLegacyFioArgsAllowExplicitDataSizeCompletion(t *testing.T) {
+	joined := strings.Join(legacyFioArgs("libaio", "4k", "1G", "/tmp/test.fio", false, 0), " ")
+	if strings.Contains(joined, "--runtime=") || strings.Contains(joined, "--time_based") || strings.Contains(joined, "timeout") {
+		t.Fatalf("explicit zero runtime did not preserve data-size completion: %q", joined)
 	}
 }
 

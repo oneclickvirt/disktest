@@ -39,13 +39,25 @@ func TestParseCLIRejectsInvalidAndIgnoredOptions(t *testing.T) {
 		{"-m", "unknown"},
 		{"-d", "all"},
 		{"-p", ""},
-		{"--duration", "1s"},
+		{"-m", "dd", "--duration", "1s"},
 		{"--structured", "-m", "fio"},
 		{"--structured", "--size", "1048576"},
 		{"unexpected"},
 	} {
 		if _, err := parseCLI(args); err == nil {
 			t.Fatalf("expected arguments %v to be rejected", args)
+		}
+	}
+}
+
+func TestParseCLIAllowsClassicFioDuration(t *testing.T) {
+	for _, args := range [][]string{{"--duration", "30s"}, {"-m", "fio", "--duration", "0"}} {
+		opts, err := parseCLI(args)
+		if err != nil {
+			t.Fatalf("classic FIO duration %v was rejected: %v", args, err)
+		}
+		if !opts.runtimeSet {
+			t.Fatalf("classic FIO duration %v was not marked explicit", args)
 		}
 	}
 }

@@ -45,6 +45,20 @@ func generateFioTestHeader(language string, actualTestPaths []string) string {
 
 // FioTest 通过fio测试硬盘
 func FioTest(language string, enableMultiCheck bool, testPath string) string {
+	return FioTestWithRuntime(language, enableMultiCheck, testPath, DefaultLegacyFioRuntime)
+}
+
+// DefaultLegacyFioRuntime bounds each classic FIO workload without imposing
+// an external process timeout. Callers can pass zero to FioTestWithRuntime to
+// run the configured data size to completion instead.
+const DefaultLegacyFioRuntime = 30 * time.Second
+
+// FioTestWithRuntime runs the classic four-row FIO benchmark with a caller-
+// selected per-scenario workload duration.
+func FioTestWithRuntime(language string, enableMultiCheck bool, testPath string, scenarioRuntime time.Duration) string {
+	if scenarioRuntime < 0 {
+		scenarioRuntime = 0
+	}
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
@@ -115,7 +129,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 						loggerInsert(Logger, "生成FIO测试文件输出: "+buildOutput)
 					}
 					time.Sleep(1 * time.Second)
-					tempResult, err := execFioTest(path, path, fioSize)
+					tempResult, err := execFioTestWithRuntime(path, path, fioSize, scenarioRuntime)
 					if strings.TrimSpace(tempResult) != "" {
 						actualResults = append(actualResults, tempResult)
 					}
@@ -174,7 +188,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			if buildPath != "" {
 				loggerInsert(Logger, "使用路径进行FIO测试: "+buildPath)
 				time.Sleep(1 * time.Second)
-				tempResult, err := execFioTest(buildPath, buildPath, fioSize)
+				tempResult, err := execFioTestWithRuntime(buildPath, buildPath, fioSize, scenarioRuntime)
 				if strings.TrimSpace(tempResult) != "" {
 					actualResults = append(actualResults, tempResult)
 				}
@@ -209,7 +223,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 							loggerInsert(Logger, "生成大容量路径FIO测试文件输出: "+buildOutput)
 						}
 						time.Sleep(1 * time.Second)
-						tempResult, err := execFioTest(path, path, fioSize)
+						tempResult, err := execFioTestWithRuntime(path, path, fioSize, scenarioRuntime)
 						if strings.TrimSpace(tempResult) != "" {
 							actualResults = append(actualResults, tempResult)
 						}
@@ -248,7 +262,7 @@ func FioTest(language string, enableMultiCheck bool, testPath string) string {
 			Logger.Info("在指定路径生成FIO测试文件输出: " + tempText)
 		}
 		time.Sleep(1 * time.Second)
-		tempResult, err := execFioTest(testPath, testPath, fioSize)
+		tempResult, err := execFioTestWithRuntime(testPath, testPath, fioSize, scenarioRuntime)
 		if strings.TrimSpace(tempResult) != "" {
 			actualResults = append(actualResults, tempResult)
 		}
@@ -354,6 +368,10 @@ func buildFioFile(path, fioSize string) (string, error) {
 
 // execFioTest 使用fio测试文件进行测试
 func execFioTest(path, devicename, fioSize string) (string, error) {
+	return execFioTestWithRuntime(path, devicename, fioSize, DefaultLegacyFioRuntime)
+}
+
+func execFioTestWithRuntime(path, devicename, fioSize string, scenarioRuntime time.Duration) (string, error) {
 	if EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
@@ -381,7 +399,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	var firstErr error
 	for _, BS := range blockSizes {
 		loggerInsert(Logger, "开始测试块大小: "+BS)
-		fioArgs := legacyFioArgs(ioEngine, BS, fioSize, testFilePath, runtime.GOOS == "darwin" || runtime.GOOS == "windows")
+		fioArgs := legacyFioArgs(ioEngine, BS, fioSize, testFilePath, runtime.GOOS == "darwin" || runtime.GOOS == "windows", scenarioRuntime)
 		var output []byte
 		var runErr error
 		cmd2 := exec.Command(baseArgs[0], append(baseArgs[1:], fioArgs...)...)
@@ -414,7 +432,7 @@ func execFioTest(path, devicename, fioSize string) (string, error) {
 	return result, firstErr
 }
 
-func legacyFioArgs(ioEngine, blockSize, fioSize, testFilePath string, buffered bool) []string {
+func legacyFioArgs(ioEngine, blockSize, fioSize, testFilePath string, buffered bool, scenarioRuntime time.Duration) []string {
 	direct := "--direct=1"
 	args := []string{
 		"--name=rand_rw_" + blockSize,
@@ -430,6 +448,9 @@ func legacyFioArgs(ioEngine, blockSize, fioSize, testFilePath string, buffered b
 		direct = "--direct=0"
 	} else {
 		args = append(args, "--gtod_reduce=1")
+	}
+	if scenarioRuntime > 0 {
+		args = append(args, fmt.Sprintf("--runtime=%d", max(int(scenarioRuntime.Seconds()), 1)))
 	}
 	return append(args,
 		direct,

@@ -96,8 +96,16 @@ func parseCLI(args []string) (cliOptions, error) {
 		if opts.sizeSet && (opts.sizeBytes < 16<<20 || opts.sizeBytes > 2<<30) {
 			return opts, fmt.Errorf("structured size must be between 16 MiB and 2 GiB")
 		}
-	} else if opts.runtimeSet || opts.timeoutSet || opts.sizeSet {
-		return opts, fmt.Errorf("-duration, -timeout, and -size require structured output")
+	} else {
+		if opts.runtimeSet && opts.runtime < 0 {
+			return opts, fmt.Errorf("FIO duration must not be negative")
+		}
+		if opts.runtimeSet && opts.testMethod == "dd" {
+			return opts, fmt.Errorf("-duration is only used by the FIO method")
+		}
+		if opts.timeoutSet || opts.sizeSet {
+			return opts, fmt.Errorf("-timeout and -size require structured output")
+		}
 	}
 	return opts, nil
 }
@@ -115,7 +123,7 @@ func newFlagSet(opts *cliOptions, output io.Writer) *flag.FlagSet {
 	fs.BoolVar(&opts.jsonOutput, "json", false, "Print the Go structured FIO result as JSON")
 	fs.BoolVar(&opts.jsonOutput, "structured", false, "Print the Go structured FIO result as JSON")
 	fs.BoolVar(&opts.deep, "deep", false, "Run the explicit deep FIO matrix")
-	fs.DurationVar(&opts.runtime, "duration", 0, "Per-scenario FIO runtime; 0 runs the configured data size")
+	fs.DurationVar(&opts.runtime, "duration", 0, "Per-scenario FIO workload duration; classic defaults to 30s, explicit 0 runs the configured data size")
 	fs.DurationVar(&opts.timeout, "timeout", 0, "FIO matrix timeout; 0 uses the caller deadline only")
 	fs.Int64Var(&opts.sizeBytes, "size", 0, "Temporary test-file size in bytes")
 	return fs
@@ -202,7 +210,13 @@ func main() {
 	}
 	switch testMethod {
 	case "fio":
-		res = runLegacyDiskFallback(language, isMultiCheck, testPath, legacyFioTest, legacyDDTest, "Fio测试不可用，已切换至DD测试。", "Fio test unavailable, switched to DD.")
+		fioTest := legacyFioTest
+		if opts.runtimeSet {
+			fioTest = func(language string, multi bool, path string) string {
+				return disk.FioTestWithRuntime(language, multi, path, opts.runtime)
+			}
+		}
+		res = runLegacyDiskFallback(language, isMultiCheck, testPath, fioTest, legacyDDTest, "Fio测试不可用，已切换至DD测试。", "Fio test unavailable, switched to DD.")
 	case "dd":
 		res = runLegacyDiskFallback(language, isMultiCheck, testPath, legacyDDTest, legacyFioTest, "DD测试不可用，已切换至Fio测试。", "DD test unavailable, switched to Fio.")
 	default:
