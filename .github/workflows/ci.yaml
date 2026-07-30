@@ -4,45 +4,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    strategy:
-      matrix:
-        go: [ '1.22.x' ]
-        os: [ ubuntu-latest ]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go }}
+          go-version-file: go.mod
+          cache: true
 
       - name: Test
-        run: go test ./... -coverprofile=coverage.txt
+        run: go test -race ./...
 
-      - name: Create Tag
-        if: success() # 仅在测试成功时运行
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-          TAG="v0.0.12-$(date +'%Y%m%d%H%M%S')"
-          echo "TAG=$TAG" >> $GITHUB_ENV
-          git tag $TAG
-          git push origin $TAG
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update README
-        if: success()
-        run: |
-          sed -i "s|^go get github.com/oneclickvirt/disktest@.*|go get github.com/oneclickvirt/disktest@${{ env.TAG }}|" README.md
-          git add README.md
-          git commit -m "Update README.md with new version ${{ env.TAG }}"
-          git push origin HEAD
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Vet
+        run: go vet ./...
