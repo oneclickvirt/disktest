@@ -117,6 +117,17 @@ func LegacyResultUsable(output string) bool {
 	return false
 }
 
+// fallbackLegacyMultiResult restores the original single-path behavior only
+// when automatic multi-disk discovery produced no measured transfer rate.
+// Explicit paths and partially successful multi-disk results are preserved.
+func fallbackLegacyMultiResult(enableMultiCheck bool, testPath, method, multiResult string, singlePath func() string) string {
+	if !enableMultiCheck || strings.TrimSpace(testPath) != "" || LegacyResultUsable(multiResult) || singlePath == nil {
+		return multiResult
+	}
+	loggerInsert(Logger, method+"多路径测试未返回可用速率，回退到默认单路径测试")
+	return singlePath()
+}
+
 func splitCommand(cmd string) []string {
 	parts := strings.Fields(strings.TrimSpace(cmd))
 	return parts

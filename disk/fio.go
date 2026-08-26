@@ -270,7 +270,10 @@ func FioTestWithRuntime(language string, enableMultiCheck bool, testPath string,
 			Logger.Info("执行FIO测试失败: " + err.Error())
 		}
 	}
-	return renderLegacyResults(language, actualResults, generateFioTestHeader)
+	result := renderLegacyResults(language, actualResults, generateFioTestHeader)
+	return fallbackLegacyMultiResult(enableMultiCheck, testPath, "FIO", result, func() string {
+		return FioTestWithRuntime(language, false, "", scenarioRuntime)
+	})
 }
 
 // adjustFioTestSize 根据可用磁盘空间调整FIO测试文件大小

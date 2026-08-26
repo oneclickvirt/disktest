@@ -185,7 +185,10 @@ func DDTestContext(ctx context.Context, language string, enableMultiCheck bool, 
 			actualResults = append(actualResults, tempResult)
 		}
 	}
-	return renderLegacyResults(language, actualResults, generateDDTestHeader)
+	result := renderLegacyResults(language, actualResults, generateDDTestHeader)
+	return fallbackLegacyMultiResult(enableMultiCheck, testPath, "DD", result, func() string {
+		return DDTestContext(ctx, language, false, "")
+	})
 }
 
 // adjustDDTestSize 根据可用磁盘空间调整DD测试参数

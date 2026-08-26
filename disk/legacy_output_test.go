@@ -96,6 +96,41 @@ func TestLegacyResultUsableRequiresMeasuredTransferRate(t *testing.T) {
 	}
 }
 
+func TestLegacyMultiResultFallsBackWhenEveryDiscoveredTargetFails(t *testing.T) {
+	calls := 0
+	got := fallbackLegacyMultiResult(true, "", "FIO", "/dev/vda1 4k failed\n", func() string {
+		calls++
+		return "/root 4k 12.3 MB/s(1) 9.8 MB/s(2)\n"
+	})
+	if calls != 1 || !LegacyResultUsable(got) || strings.Contains(got, "/dev/vda1") {
+		t.Fatalf("all-failed multi-disk result did not use the single-path fallback: calls=%d output=%q", calls, got)
+	}
+}
+
+func TestLegacyMultiResultKeepsPartialMeasurements(t *testing.T) {
+	calls := 0
+	multiResult := "/dev/vda1 4k failed\n/dev/vdb1 4k 12.3 MB/s(1) 9.8 MB/s(2)\n"
+	got := fallbackLegacyMultiResult(true, "", "DD", multiResult, func() string {
+		calls++
+		return "unexpected"
+	})
+	if calls != 0 || got != multiResult {
+		t.Fatalf("partially successful multi-disk result was replaced: calls=%d output=%q", calls, got)
+	}
+}
+
+func TestLegacyMultiResultDoesNotReplaceExplicitPath(t *testing.T) {
+	calls := 0
+	explicitResult := "/data 4k failed\n"
+	got := fallbackLegacyMultiResult(true, "/data", "DD", explicitResult, func() string {
+		calls++
+		return "unexpected"
+	})
+	if calls != 0 || got != explicitResult {
+		t.Fatalf("explicit test path was replaced: calls=%d output=%q", calls, got)
+	}
+}
+
 func TestLegacyHeadersUseNormalizedEnglish(t *testing.T) {
 	if got := generateFioTestHeader(" EN ", nil); !strings.Contains(got, "Test Path") {
 		t.Fatalf("normalized English FIO header = %q", got)
@@ -106,7 +141,11 @@ func TestLegacyHeadersUseNormalizedEnglish(t *testing.T) {
 }
 
 func TestVirtioPartitionIsKeptForMultiDiskBenchmarks(t *testing.T) {
-	mountPoint := t.TempDir()
+	mountPoint, err := os.MkdirTemp(".", "mount-test-")
+	if err != nil {
+		t.Fatalf("create mount fixture: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(mountPoint) })
 	parts := []disk.PartitionStat{{Device: "/dev/vda1", Mountpoint: mountPoint, Fstype: "ext4"}}
 
 	pathInfo := testPathsFromPartitions(parts)
