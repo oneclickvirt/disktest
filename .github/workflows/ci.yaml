@@ -1,8 +1,5 @@
 name: CI
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 on:
   push:
     branches: [main]
@@ -18,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -38,4 +35,4 @@ jobs:
         run: |
           set -euo pipefail
           go vet ./...
-          go build ./cmd
+          go build -o "$RUNNER_TEMP/disktest" ./cmd

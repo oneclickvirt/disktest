@@ -19,12 +19,12 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -48,7 +48,7 @@ jobs:
           go mod verify
           go test -race -count=1 ./...
           go vet ./...
-          go build ./cmd
+          go build -o "$RUNNER_TEMP/disktest" ./cmd
           git diff --check
       - name: Create immutable release tag
         env:

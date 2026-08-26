@@ -1,8 +1,5 @@
 name: Build and Release
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 on:
   push:
     tags:
@@ -22,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
           fetch-depth: 0
@@ -44,7 +41,7 @@ jobs:
           [[ "$version" == "$release_tag" ]]
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -109,12 +106,12 @@ jobs:
           - {goos: windows, goarch: arm64}
     steps:
       - name: Checkout release ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
