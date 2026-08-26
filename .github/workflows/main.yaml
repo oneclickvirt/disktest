@@ -40,6 +40,8 @@ jobs:
           tag_commit=$(git rev-list -n 1 "$release_tag")
           head_commit=$(git rev-parse HEAD)
           [[ -n "$tag_commit" && "$tag_commit" == "$head_commit" ]]
+          version=$(sed -n 's/^const DiskTestVersion = "\(v[0-9.]*\)"$/\1/p' disk/version.go)
+          [[ "$version" == "$release_tag" ]]
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -48,7 +50,11 @@ jobs:
           cache: true
 
       - name: Test
-        run: go test -race ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go test -race -count=1 ./...
 
       - name: Vet
         run: go vet ./...

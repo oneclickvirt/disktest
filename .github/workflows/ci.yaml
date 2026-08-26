@@ -27,7 +27,15 @@ jobs:
           cache: true
 
       - name: Test
-        run: go test -race ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go test -race -count=1 ./...
 
       - name: Vet
-        run: go vet ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          go vet ./...
+          go build ./cmd
