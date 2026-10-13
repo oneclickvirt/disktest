@@ -1,60 +1,58 @@
 name: Prepare and Tag Release
-
-on:
+permissions:
+  contents: write
+concurrency:
+  group: disktest-release
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: main
+        fetch-depth: 0
+        fetch-tags: true
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+        cache: true
+    - id: release
+      name: Resolve release tag
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=$(sed -n 's/^const DiskTestVersion = "\(v[0-9.]*\)"$/\1/p' disk/version.go)
+        tag="${{ inputs.release_tag }}"
+        [[ -n "$tag" ]] || tag="$version"
+        [[ "$tag" == "$version" ]]
+        [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+        git fetch --force --tags origin
+        ! git rev-parse --verify --quiet "refs/tags/$tag"
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+    - name: Validate release source
+      shell: bash
+      run: |
+        set -euo pipefail
+        go mod verify
+        go test -race -count=1 ./...
+        go vet ./...
+        go build -o "$RUNNER_TEMP/disktest" ./cmd
+        git diff --check
+    - name: Create immutable release tag
+      env:
+        RELEASE_TAG: ${{ steps.release.outputs.tag }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+        git push origin "refs/tags/$RELEASE_TAG"
+    env:
+      GOPROXY: https://proxy.golang.org|direct
+'on':
   workflow_dispatch:
     inputs:
       release_tag:
         description: Semantic version tag; leave empty to use DiskTestVersion
         required: false
         type: string
-
-permissions:
-  contents: write
-
-concurrency:
-  group: disktest-release
-  cancel-in-progress: false
-
-jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          fetch-depth: 0
-          fetch-tags: true
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - id: release
-        name: Resolve release tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(sed -n 's/^const DiskTestVersion = "\(v[0-9.]*\)"$/\1/p' disk/version.go)
-          tag="${{ inputs.release_tag }}"
-          [[ -n "$tag" ]] || tag="$version"
-          [[ "$tag" == "$version" ]]
-          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          git fetch --force --tags origin
-          ! git rev-parse --verify --quiet "refs/tags/$tag"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - name: Validate release source
-        shell: bash
-        run: |
-          set -euo pipefail
-          go mod verify
-          go test -race -count=1 ./...
-          go vet ./...
-          go build -o "$RUNNER_TEMP/disktest" ./cmd
-          git diff --check
-      - name: Create immutable release tag
-        env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
-          git push origin "refs/tags/$RELEASE_TAG"
