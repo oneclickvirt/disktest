@@ -1,6 +1,7 @@
 package disk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -97,6 +98,11 @@ func DeepFioScenarios() []FioScenario {
 }
 
 func ParseFioJSON(data []byte, scenarioID string) ([]FioMetrics, error) {
+	// Some native fio builds write startup warnings to stdout before the JSON.
+	// Keep parsing the complete JSON document, including rejecting trailing data.
+	if start := bytes.IndexByte(data, '{'); start > 0 {
+		data = data[start:]
+	}
 	var document struct {
 		Jobs []struct {
 			Read  fioDirection `json:"read"`
@@ -254,6 +260,11 @@ func runFioMatrixWithDeps(ctx context.Context, config MatrixConfig, scenarios []
 			fmt.Sprintf("--numjobs=%d", scenario.Jobs), fmt.Sprintf("--size=%d", config.SizeBytes),
 			"--direct=1", "--filename="+testPath, "--group_reporting=1", "--output-format=json",
 		)
+		if runtime.GOOS == "windows" {
+			// Windows fio already uses threads; requesting them explicitly keeps
+			// its process-shared-mutex warning out of the structured output.
+			args = append(args, "--thread=1")
+		}
 		if perScenarioRuntime > 0 {
 			args = append(args, fmt.Sprintf("--runtime=%d", max(int(perScenarioRuntime.Seconds()), 1)), "--time_based=1")
 		}

@@ -68,6 +68,20 @@ func TestParseFioJSONRejectsMissingJobs(t *testing.T) {
 	}
 }
 
+func TestParseNativeWindowsFioStartupWarning(t *testing.T) {
+	const warning = "fio: this platform does not support process shared mutexes, forcing use of threads. Use the 'thread' option to get rid of this warning.\r\n"
+	const output = `{"jobs":[{"read":{"bw_bytes":11305942,"iops":2760.239760}}]}`
+	metrics, err := ParseFioJSON([]byte(warning+output), "4k-q1-read")
+	if err != nil || len(metrics) != 1 || metrics[0].BandwidthBytesPerSecond != 11305942 {
+		t.Fatalf("native Windows fio output was not parsed: %+v, %v", metrics, err)
+	}
+	for _, invalid := range []string{warning, warning + `{"jobs":[]}`, warning + output + "not JSON"} {
+		if _, err := ParseFioJSON([]byte(invalid), "invalid"); err == nil {
+			t.Fatalf("accepted incomplete or malformed fio data: %q", invalid)
+		}
+	}
+}
+
 func TestEnsureMatrixSpaceRejectsRawDeviceAndSmallFile(t *testing.T) {
 	if err := ensureMatrixSpace(t.TempDir(), 1<<20); err == nil {
 		t.Fatal("expected small file rejection")
