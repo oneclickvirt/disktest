@@ -3,9 +3,9 @@
   "skill_name": "oneclickvirt-disktest",
   "mcp": true,
   "files": {
-    "agent/profile.json": "fdadbe48d023b63d3f2f751ef35b644fe215d9f44da1ae143f6f4c3508792941",
-    "skills/oneclickvirt-disktest/SKILL.md": "ef081894e153127d03dc4fd0ea4e435c98008322215fe9b3bb44bb4c227f9507",
-    "skills/oneclickvirt-disktest/SKILL_ZH.md": "33fc1298ad242ff21a62c96450bc8e72b1474d48eb79a0224206fae7ce3c6673",
-    "agent/server.py": "c54981973f8d98e6eada6e0442f3d7e5c9296947706c2c5d33b80b7f9a1c9b5b"
+    "agent/profile.json": "0d822c3d4f4d01ee1a51c635229b6772bb7055a9a52c514f3a069fb7b32e09e4",
+    "skills/oneclickvirt-disktest/SKILL.md": "15e3c4ac2fa98b15e909a36a125e55994667d25d915ea43cf7b0d996de1df5f0",
+    "skills/oneclickvirt-disktest/SKILL_ZH.md": "214cb6614088475a8de8e1963549e10b794f8267a4b3ad169aac507a9658d196",
+    "agent/server.py": "f4fe673f355a9b8ab06b4f8c1f90251e0ad79e1d9324ee4d62eff5e12ac45b74"
   }
 }

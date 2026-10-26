@@ -29,7 +29,7 @@ python3 install_agent.py --client codex
 
 ## MCP
 
-运行需要 Python 3.9 以上版本；MCP 使用本机已有程序及其权限，不自动安装虚拟化环境。将安装目录内 `mcp.example.json` 合并到客户端配置。远端宿主机应通过无交互 SSH 运行该主机上的适配器。
+运行需要 Python 3.9 以上版本；MCP 使用本机已有程序及其权限，不自动安装虚拟化环境。将安装目录内对应客户端的 `mcp.codex.toml`、`mcp.claude.json` 或 `mcp.openclaw.json` 合并到已有配置。远端宿主机应通过无交互 SSH 运行该主机上的适配器。
 
 ```bash
 python3 install_agent.py --client codex --install-binary
@@ -41,7 +41,7 @@ python3 install_agent.py --client codex --install-binary
 
 可用检测预设：
 
-- `short`: `disktest -json -p {scratch} -size 16777216 -duration 1s -timeout 12s`
+- `short`: `disktest -json -p . -size 16777216 -duration 1s -timeout 30s`
 
 `release_assets` 返回实际版本、文件名、大小、摘要及下载地址；需要固定版本时传完整标签。更新产物后应重新安装并验证帮助和实际调用，不能只因文件存在便判定可用。
 
