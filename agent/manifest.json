@@ -1,0 +1,11 @@
+{
+  "repository": "oneclickvirt/disktest",
+  "skill_name": "oneclickvirt-disktest",
+  "mcp": true,
+  "files": {
+    "agent/profile.json": "fdadbe48d023b63d3f2f751ef35b644fe215d9f44da1ae143f6f4c3508792941",
+    "skills/oneclickvirt-disktest/SKILL.md": "ef081894e153127d03dc4fd0ea4e435c98008322215fe9b3bb44bb4c227f9507",
+    "skills/oneclickvirt-disktest/SKILL_ZH.md": "33fc1298ad242ff21a62c96450bc8e72b1474d48eb79a0224206fae7ce3c6673",
+    "agent/server.py": "d01416e6194095d90bf0d49ea29f7122969f0b74cf4d74ed0b1ce78753423a7d"
+  }
+}

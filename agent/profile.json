@@ -1,0 +1,44 @@
+{
+  "repository": "oneclickvirt/disktest",
+  "branch": "main",
+  "skill_name": "oneclickvirt-disktest",
+  "purpose": "Run structured disk IO in a dedicated temporary directory with a 16 MiB test file; never point it at a raw block device.",
+  "notes": [
+    "Read probe_help from the installed binary before assuming flags are supported. MCP returns native JSON when the program provides JSON, otherwise native text.",
+    "Keep partial/network errors distinct from confirmed test outcomes. Current release assets and their actual architecture are available through release_assets.",
+    "Set ONECLICKVIRT_MCP_ALLOW_BENCHMARKS=1 only on an intended test host. This preset consumes local resources; it does not run a full stress test."
+  ],
+  "guide": "https://www.spiritlhl.net/guide/agent_integrations.html",
+  "releases": true,
+  "mcp": true,
+  "binary": "disktest",
+  "asset_prefix": "disktest",
+  "presets": {
+    "short": {
+      "args": [
+        "-json",
+        "-p",
+        "{scratch}",
+        "-size",
+        "16777216",
+        "-duration",
+        "1s",
+        "-timeout",
+        "12s"
+      ],
+      "timeout": 18
+    }
+  },
+  "benchmark": true,
+  "source_files": [
+    "cmd/main.go",
+    "disktest_install.sh",
+    "go.mod"
+  ],
+  "purpose_zh": "在独立临时目录执行有时限、16 MiB 文件大小的磁盘 IO 测试。",
+  "notes_zh": [
+    "先用 probe_help 核对已安装程序的实际帮助。程序支持 JSON 时返回原生 JSON，否则返回原生文本。",
+    "区分部分结果、网络失败和确定结论；通过 release_assets 查询当前真实产物及架构。",
+    "只在指定测试主机设置 ONECLICKVIRT_MCP_ALLOW_BENCHMARKS=1。这些预设会消耗本机资源，但不执行完整压力测试。"
+  ]
+}
